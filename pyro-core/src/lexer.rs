@@ -16,6 +16,8 @@ pub enum Token {
     Match,
     Case,
     Import,
+    Interface,
+    Type,
 
     // Identifiers and Literals
     Identifier(String),
@@ -42,6 +44,8 @@ pub enum Token {
     RParen,
     LBracket,    // [
     RBracket,    // ]
+    LBrace,      // {
+    RBrace,      // }
 
     // Significant Whitespace
     Indent,
@@ -132,6 +136,8 @@ impl<'a> Lexer<'a> {
                 ')' => { self.input.next(); tokens.push(Token::RParen); }
                 '[' => { self.input.next(); tokens.push(Token::LBracket); }
                 ']' => { self.input.next(); tokens.push(Token::RBracket); }
+                '{' => { self.input.next(); tokens.push(Token::LBrace); }
+                '}' => { self.input.next(); tokens.push(Token::RBrace); }
                 '"' => {
                     tokens.push(self.read_string());
                 }
@@ -215,6 +221,8 @@ impl<'a> Lexer<'a> {
             "match" => Token::Match,
             "case" => Token::Case,
             "import" => Token::Import,
+            "interface" => Token::Interface,
+            "type" => Token::Type,
             _ => Token::Identifier(ident),
         }
     }

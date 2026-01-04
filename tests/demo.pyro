@@ -1,0 +1,13 @@
+type MyInt = int
+
+interface Speaker {
+    def speak() -> string
+    def name() -> string
+}
+
+struct Dog {
+    id: int
+    name: string
+}
+
+print("Parsing successful!")

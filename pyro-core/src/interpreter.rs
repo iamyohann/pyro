@@ -14,7 +14,17 @@ pub enum Value {
         params: Vec<(String, Type)>,
         body: Rc<Vec<Stmt>>,
     },
-    List(Rc<RefCell<Vec<Value>>>),
+    List(Rc<Vec<Value>>), // Immutable
+    Tuple(Rc<Vec<Value>>),
+    Set(Rc<Vec<Value>>),
+    Dict(Rc<Vec<(Value, Value)>>),
+    
+    // Mutable
+    ListMutable(Rc<RefCell<Vec<Value>>>),
+    TupleMutable(Rc<RefCell<Vec<Value>>>),
+    SetMutable(Rc<RefCell<Vec<Value>>>),
+    DictMutable(Rc<RefCell<Vec<(Value, Value)>>>),
+    
     Void,
 }
 
@@ -96,11 +106,14 @@ impl Interpreter {
                 println!("Importing module: {}", path);
                 // Implementation will come with module resolution
             }
+            Stmt::StructDef { .. } | Stmt::InterfaceDef { .. } | Stmt::TypeAlias { .. } => {
+                // Not yet supported in interpreter
+            }
         }
         Ok(None)
     }
 
-    fn evaluate(&mut self, expr: Expr) -> Result<Value, String> {
+    pub fn evaluate(&mut self, expr: Expr) -> Result<Value, String> {
         match expr {
             Expr::LiteralInt(i) => Ok(Value::Int(i)),
             Expr::LiteralFloat(f) => Ok(Value::Float(f)),
@@ -111,12 +124,39 @@ impl Interpreter {
                 for e in elements {
                     vals.push(self.evaluate(e)?);
                 }
-                Ok(Value::List(Rc::new(RefCell::new(vals))))
+                Ok(Value::List(Rc::new(vals)))
+            }
+            Expr::Tuple(elements) => {
+                let mut vals = Vec::new();
+                for e in elements {
+                    vals.push(self.evaluate(e)?);
+                }
+                Ok(Value::Tuple(Rc::new(vals)))
+            }
+            Expr::Set(elements) => {
+                let mut vals = Vec::new();
+                for e in elements {
+                    vals.push(self.evaluate(e)?);
+                }
+                Ok(Value::Set(Rc::new(vals)))
+            }
+            Expr::Dict(elements) => {
+                let mut vals = Vec::new();
+                for (k, v) in elements {
+                    let key = self.evaluate(k)?;
+                    let val = self.evaluate(v)?;
+                    vals.push((key, val));
+                }
+                Ok(Value::Dict(Rc::new(vals)))
             }
             Expr::Identifier(name) => {
-                if name == "print" {
-                    // special hack for print
-                   return Ok(Value::String(Rc::new("print".to_string()))); 
+                if name == "print" 
+                   || name == "ListMutable" 
+                   || name == "TupleMutable" 
+                   || name == "SetMutable" 
+                   || name == "DictMutable" {
+                    // special hack for built-ins
+                   return Ok(Value::String(Rc::new(name))); 
                 }
                 
                 self.globals.get(&name).cloned().ok_or_else(|| format!("Undefined variable: {}", name))
@@ -139,14 +179,48 @@ impl Interpreter {
             Expr::Call { function, args } => {
                 let func_val = self.evaluate(*function)?;
                 
-                // Hacky print built-in
+                // Hacky built-ins
                 if let Value::String(s) = &func_val {
-                    if s.as_str() == "print" {
+                    let name = s.as_str();
+                    if name == "print" {
                         for arg in args {
                              let v = self.evaluate(arg)?;
                              println!("{:?}", v);
                         }
                         return Ok(Value::Void);
+                    }
+                     if name == "ListMutable" {
+                         // Expect 1 arg: List
+                         if args.len() != 1 { return Err("ListMutable takes 1 argument".to_string()); }
+                         let v = self.evaluate(args[0].clone())?;
+                         match v {
+                             Value::List(l) => return Ok(Value::ListMutable(Rc::new(RefCell::new((*l).clone())))),
+                             _ => return Err("ListMutable expects a List".to_string()),
+                         }
+                    }
+                    if name == "TupleMutable" {
+                         if args.len() != 1 { return Err("TupleMutable takes 1 argument".to_string()); }
+                         let v = self.evaluate(args[0].clone())?;
+                         match v {
+                             Value::Tuple(l) => return Ok(Value::TupleMutable(Rc::new(RefCell::new((*l).clone())))),
+                             _ => return Err("TupleMutable expects a Tuple".to_string()),
+                         }
+                    }
+                    if name == "SetMutable" {
+                         if args.len() != 1 { return Err("SetMutable takes 1 argument".to_string()); }
+                         let v = self.evaluate(args[0].clone())?;
+                         match v {
+                             Value::Set(l) => return Ok(Value::SetMutable(Rc::new(RefCell::new((*l).clone())))),
+                             _ => return Err("SetMutable expects a Set".to_string()),
+                         }
+                    }
+                    if name == "DictMutable" {
+                         if args.len() != 1 { return Err("DictMutable takes 1 argument".to_string()); }
+                         let v = self.evaluate(args[0].clone())?;
+                         match v {
+                             Value::Dict(l) => return Ok(Value::DictMutable(Rc::new(RefCell::new((*l).clone())))),
+                             _ => return Err("DictMutable expects a Dict".to_string()),
+                         }
                     }
                 }
                 

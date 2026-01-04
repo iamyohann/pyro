@@ -106,10 +106,10 @@ impl Transpiler {
                 self.output.push_str(";\n");
             }
             Stmt::Import(_) => {
-                // Imports are handled by resolving them into the statement list before transpilation
-                // So we ignore them here or they shouldn't exist in the flattened AST ideally.
-                // Or we treat them as comments.
-                self.output.push_str("// import resolved \n");
+                 self.output.push_str("// import resolved \n");
+            }
+            Stmt::StructDef { .. } | Stmt::InterfaceDef { .. } | Stmt::TypeAlias { .. } => {
+                 self.output.push_str("// type defs not yet supported in transpiler \n");
             }
         }
     }
@@ -178,6 +178,39 @@ impl Transpiler {
                  }
                  self.output.push_str("]");
             }
+            Expr::Tuple(elements) => {
+                 self.output.push_str("(");
+                 for (i, e) in elements.iter().enumerate() {
+                     if i > 0 { self.output.push_str(", "); }
+                     self.transpile_expr(e.clone());
+                 }
+                 // If single element tuple, need trailing comma? Rust doesn't strictly require it for (x,) if types imply it, but (x) is parens.
+                 // (x,) syntax in Rust is valid.
+                 if elements.len() == 1 {
+                     self.output.push_str(",");
+                 }
+                 self.output.push_str(")");
+            }
+            Expr::Set(elements) => {
+                 self.output.push_str("std::collections::HashSet::from([");
+                 for (i, e) in elements.iter().enumerate() {
+                     if i > 0 { self.output.push_str(", "); }
+                     self.transpile_expr(e.clone());
+                 }
+                 self.output.push_str("])");
+            }
+            Expr::Dict(elements) => {
+                 self.output.push_str("std::collections::HashMap::from([");
+                 for (i, (k, v)) in elements.iter().enumerate() {
+                     if i > 0 { self.output.push_str(", "); }
+                     self.output.push_str("(");
+                     self.transpile_expr(k.clone());
+                     self.output.push_str(", ");
+                     self.transpile_expr(v.clone());
+                     self.output.push_str(")");
+                 }
+                 self.output.push_str("])");
+            }
         }
     }
 
@@ -188,6 +221,14 @@ impl Transpiler {
             Type::Bool => "bool".to_string(),
             Type::String => "String".to_string(),
             Type::Void => "()".to_string(),
+            Type::List => "Vec<Box<dyn std::any::Any>>".to_string(), // Placeholder
+            Type::Tuple => "Box<dyn std::any::Any>".to_string(), // Placeholder
+            Type::Set => "std::collections::HashSet<Box<dyn std::any::Any>>".to_string(), // Placeholder
+            Type::Dict => "std::collections::HashMap<String, Box<dyn std::any::Any>>".to_string(), // Placeholder
+            Type::ListMutable => "std::sync::Arc<std::sync::Mutex<Vec<Box<dyn std::any::Any>>>>".to_string(),
+            Type::TupleMutable => "std::sync::Arc<std::sync::Mutex<Box<dyn std::any::Any>>>".to_string(),
+            Type::SetMutable => "std::sync::Arc<std::sync::Mutex<std::collections::HashSet<Box<dyn std::any::Any>>>>".to_string(),
+            Type::DictMutable => "std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Box<dyn std::any::Any>>>>".to_string(),
             Type::UserDefined(s) => format!("usr_{}", s),
         }
     }

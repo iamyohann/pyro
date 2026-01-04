@@ -5,6 +5,14 @@ pub enum Type {
     Bool,
     String,
     Void,
+    List,
+    Tuple,
+    Set,
+    Dict,
+    ListMutable,
+    TupleMutable,
+    SetMutable,
+    DictMutable,
     UserDefined(String),
 }
 
@@ -39,6 +47,9 @@ pub enum Expr {
         args: Vec<Expr>,
     },
     List(Vec<Expr>),
+    Tuple(Vec<Expr>),
+    Set(Vec<Expr>),
+    Dict(Vec<(Expr, Expr)>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,6 +82,18 @@ pub enum Stmt {
     },
     Return(Option<Expr>),
     Import(String),
+    StructDef {
+        name: String,
+        fields: Vec<(String, Type)>,
+    },
+    InterfaceDef {
+        name: String,
+        methods: Vec<(String, Vec<(String, Type)>, Type)>,
+    },
+    TypeAlias {
+        name: String,
+        alias: Type,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,12 +1,12 @@
 use clap::{Parser, Subcommand};
 use pyro_core::interpreter::Interpreter;
-use pyro_core::ast::Stmt;
+// use pyro_core::ast::Stmt;
 use anyhow::{Context, Result};
 use std::collections::HashSet;
-use std::fs;
+// use std::fs;
 use std::path::PathBuf;
-use pyro_core::lexer::Lexer;
-use pyro_core::parser::Parser as PyroParser;
+// use pyro_core::lexer::Lexer;
+// use pyro_core::parser::Parser as PyroParser;
 
 mod cmd;
 mod util;
@@ -47,6 +47,8 @@ enum Commands {
     },
     /// Install dependencies
     Install,
+    /// Run the interactive shell
+    Shell,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -92,6 +94,9 @@ fn main() -> Result<()> {
         }
         Commands::Build { file, output, target } => {
             cmd::build::r#impl(file.clone(), output.clone(), target.clone())?;
+        }
+        Commands::Shell => {
+            cmd::shell::run()?;
         }
     }
 

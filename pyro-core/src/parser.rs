@@ -39,6 +39,9 @@ impl<'a> Parser<'a> {
 
             Some(Token::While) => self.parse_while(),
             Some(Token::Import) => self.parse_import(),
+            Some(Token::Struct) => self.parse_struct_decl(),
+            Some(Token::Interface) => self.parse_interface_decl(),
+            Some(Token::Type) => self.parse_type_alias(),
             _ => {
                 let expr = self.parse_expression()?;
                 
@@ -108,6 +111,14 @@ impl<'a> Parser<'a> {
                 "bool" => Ok(Type::Bool),
                 "string" => Ok(Type::String),
                 "void" => Ok(Type::Void),
+                "list" => Ok(Type::List),
+                "tuple" => Ok(Type::Tuple),
+                "set" => Ok(Type::Set),
+                "dict" => Ok(Type::Dict),
+                "list_mut" => Ok(Type::ListMutable),
+                "tuple_mut" => Ok(Type::TupleMutable),
+                "set_mut" => Ok(Type::SetMutable),
+                "dict_mut" => Ok(Type::DictMutable),
                 _ => Ok(Type::UserDefined(s.clone())),
             },
             _ => Err("Expected type identifier".to_string()),
@@ -248,12 +259,121 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(Token::LParen) => {
-                self.tokens.next();
+                self.tokens.next(); // (
+                
+                // Check for empty tuple ()
+                if let Some(Token::RParen) = self.tokens.peek() {
+                    self.tokens.next();
+                    return Ok(Expr::Tuple(Vec::new()));
+                }
+
                 let expr = self.parse_expression()?;
-                if let Some(Token::RParen) = self.tokens.next() {
+                
+                if let Some(Token::Comma) = self.tokens.peek() {
+                    // It's a tuple (expr, ...)
+                    self.tokens.next(); // consume comma
+                    let mut elements = vec![expr];
+                    if let Some(Token::RParen) = self.tokens.peek() {
+                        // (expr,)
+                        self.tokens.next();
+                        Ok(Expr::Tuple(elements))
+                    } else {
+                        // (expr, expr2, ...)
+                        loop {
+                            elements.push(self.parse_expression()?);
+                            match self.tokens.peek() {
+                                Some(Token::Comma) => { self.tokens.next(); }
+                                Some(Token::RParen) => {
+                                    self.tokens.next();
+                                    break;
+                                }
+                                _ => return Err("Expected ',' or ')' in tuple".to_string()),
+                            }
+                        }
+                        Ok(Expr::Tuple(elements))
+                    }
+                } else if let Some(Token::RParen) = self.tokens.peek() {
+                    // It's a group (expr)
+                    self.tokens.next();
                     Ok(expr)
                 } else {
-                    Err("Expected ')'".to_string())
+                    Err("Expected ')' or ','".to_string())
+                }
+            }
+            Some(Token::LBrace) => {
+                self.tokens.next(); // {
+                
+                if let Some(Token::RBrace) = self.tokens.peek() {
+                    self.tokens.next();
+                    // Empty brace is empty Dict
+                    return Ok(Expr::Dict(Vec::new()));
+                }
+
+                let first = self.parse_expression()?;
+
+                if let Some(Token::Colon) = self.tokens.peek() {
+                    // It's a Dict
+                    self.tokens.next(); // consume :
+                    let val = self.parse_expression()?;
+                    let mut entries = vec![(first, val)];
+
+                    loop {
+                        if let Some(Token::RBrace) = self.tokens.peek() {
+                            self.tokens.next();
+                            break;
+                        }
+                        if let Some(Token::Comma) = self.tokens.peek() {
+                            self.tokens.next();
+                        } else {
+                            // Only check for RBrace again if no comma (for trailing comma support or end)
+                            // Actually if no comma, must be RBrace
+                             if let Some(Token::RBrace) = self.tokens.peek() {
+                                self.tokens.next();
+                                break;
+                            }
+                             return Err("Expected ',' or '}' in dict".to_string());
+                        }
+
+                        // Check if we hit RBrace after comma (trailing comma)
+                        if let Some(Token::RBrace) = self.tokens.peek() {
+                             self.tokens.next();
+                             break;
+                        }
+
+                        let k = self.parse_expression()?;
+                        if let Some(Token::Colon) = self.tokens.next() {} else {
+                            return Err("Expected ':' in dict entry".to_string());
+                        }
+                        let v = self.parse_expression()?;
+                        entries.push((k, v));
+                    }
+                    Ok(Expr::Dict(entries))
+                } else {
+                    // It's a Set
+                    let mut elements = vec![first];
+                     loop {
+                        if let Some(Token::RBrace) = self.tokens.peek() {
+                            self.tokens.next();
+                            break;
+                        }
+                         if let Some(Token::Comma) = self.tokens.peek() {
+                            self.tokens.next();
+                        } else {
+                             if let Some(Token::RBrace) = self.tokens.peek() {
+                                self.tokens.next();
+                                break;
+                            }
+                            return Err("Expected ',' or '}' in set".to_string());
+                        }
+
+                         if let Some(Token::RBrace) = self.tokens.peek() {
+                             self.tokens.next();
+                             break;
+                        }
+
+                        elements.push(self.parse_expression()?);
+                    }
+                    Ok(Expr::Set(elements))
                 }
             }
             Some(Token::LBracket) => {
@@ -419,5 +539,153 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Stmt::Import(path))
+    }
+
+    fn parse_struct_decl(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume struct
+        let name = match self.tokens.next() {
+            Some(Token::Identifier(s)) => s.clone(),
+            _ => return Err("Expected struct name".to_string()),
+        };
+
+        if let Some(Token::LBrace) = self.tokens.next() {} else {
+            return Err("Expected '{' after struct name".to_string());
+        }
+
+        let mut fields = Vec::new();
+        while let Some(token) = self.tokens.peek() {
+             if **token == Token::RBrace {
+                 self.tokens.next();
+                 break;
+             }
+             if **token == Token::Newline || **token == Token::Indent || **token == Token::Dedent {
+                 self.tokens.next();
+                 continue;
+             }
+             
+             let field_name = match self.tokens.next() {
+                 Some(Token::Identifier(s)) => s.clone(),
+                 _ => return Err("Expected field name".to_string()),
+             };
+
+             if let Some(Token::Colon) = self.tokens.next() {} else {
+                 return Err("Expected ':' after field name".to_string());
+             }
+
+             let field_type = self.parse_type()?;
+             fields.push((field_name, field_type));
+             
+             // Check for comma or newline or end
+             match self.tokens.peek() {
+                 Some(Token::Comma) => { self.tokens.next(); }
+                 Some(Token::Newline) => { self.tokens.next(); }
+                 Some(Token::RBrace) => {}
+                 _ => return Err("Expected ',' or newline or '}' after field".to_string()),
+             }
+        }
+        
+        if let Some(Token::Newline) = self.tokens.peek() {
+            self.tokens.next();
+        }
+
+        Ok(Stmt::StructDef { name, fields })
+    }
+
+    fn parse_interface_decl(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume interface
+        let name = match self.tokens.next() {
+            Some(Token::Identifier(s)) => s.clone(),
+            _ => return Err("Expected interface name".to_string()),
+        };
+
+        if let Some(Token::LBrace) = self.tokens.next() {} else {
+            return Err("Expected '{'".to_string());
+        }
+
+        let mut methods = Vec::new();
+        while let Some(token) = self.tokens.peek() {
+             if **token == Token::RBrace {
+                 self.tokens.next();
+                 break;
+             }
+             if **token == Token::Newline || **token == Token::Indent || **token == Token::Dedent {
+                 self.tokens.next();
+                 continue;
+             }
+
+             if let Some(Token::Def) = self.tokens.next() {} else {
+                 return Err("Expected 'def' for interface method".to_string());
+             }
+
+             let method_name = match self.tokens.next() {
+                 Some(Token::Identifier(s)) => s.clone(),
+                 _ => return Err("Expected method name".to_string()),
+             };
+
+             if let Some(Token::LParen) = self.tokens.next() {} else {
+                 return Err("Expected '('".to_string());
+             }
+
+             let mut params = Vec::new();
+             if let Some(Token::RParen) = self.tokens.peek() {
+                 self.tokens.next();
+             } else {
+                 loop {
+                     let pname = match self.tokens.next() {
+                         Some(Token::Identifier(s)) => s.clone(),
+                         _ => return Err("Expected param name".to_string()),
+                     };
+                     if let Some(Token::Colon) = self.tokens.next() {} else {
+                         return Err("Expected ':'".to_string());
+                     }
+                     let ptype = self.parse_type()?;
+                     params.push((pname, ptype));
+
+                     match self.tokens.peek() {
+                         Some(Token::Comma) => { self.tokens.next(); }
+                         Some(Token::RParen) => { self.tokens.next(); break; }
+                         _ => return Err("Expected ',' or ')'".to_string()),
+                     }
+                 }
+             }
+
+             let mut ret_type = Type::Void;
+             if let Some(Token::Arrow) = self.tokens.peek() {
+                 self.tokens.next();
+                 ret_type = self.parse_type()?;
+             }
+
+             methods.push((method_name, params, ret_type));
+
+             if let Some(Token::Newline) = self.tokens.peek() {
+                 self.tokens.next();
+             }
+        }
+
+        if let Some(Token::Newline) = self.tokens.peek() {
+            self.tokens.next();
+        }
+
+        Ok(Stmt::InterfaceDef { name, methods })
+    }
+
+    fn parse_type_alias(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume type
+        let name = match self.tokens.next() {
+            Some(Token::Identifier(s)) => s.clone(),
+            _ => return Err("Expected alias name".to_string()),
+        };
+
+        if let Some(Token::Equal) = self.tokens.next() {} else {
+            return Err("Expected '=' in type alias".to_string());
+        }
+
+        let alias = self.parse_type()?;
+
+        if let Some(Token::Newline) = self.tokens.peek() {
+            self.tokens.next();
+        }
+
+        Ok(Stmt::TypeAlias { name, alias })
     }
 }

@@ -100,6 +100,71 @@ while x > 0:
     x = x - 1
 ```
 
+
+### Data Structures
+
+Pyro supports lists, tuples, sets, and dictionaries. By default, these structures are immutable.
+
+#### Immutable Structures
+
+```python
+# List (Immutable)
+let my_list: list = [1, 2, 3]
+# my_list[0] = 5  # Error: Immutable
+
+# Tuple (Immutable)
+let my_tuple: tuple = (1, 2, 3)
+
+# Set (Immutable)
+let my_set: set = {1, 2, 3}
+
+# Dictionary (Immutable)
+let my_dict: dict = {"key": "value"}
+```
+
+#### Mutable Structures
+
+To use mutable versions, use the `Mutable` constructors:
+
+```python
+# Mutable List
+let mut_list: list_mut = ListMutable([1, 2, 3])
+
+# Mutable Tuple
+let mut_tuple: tuple_mut = TupleMutable((1, 2))
+
+# Mutable Set
+let mut_set: set_mut = SetMutable({1, 2})
+
+# Mutable Dict
+let mut_dict: dict_mut = DictMutable({"key": "value"})
+```
+
+
+#### Complex Examples
+
+You can nest data structures and mix types freely:
+
+```python
+# Nested immutable list
+let nested: list = [1, [2, 3], 4]
+
+# List with mixed types
+let mixed: list = [1, "two", 3.0, true]
+
+# List of dictionaries
+let users: list = [
+    {"id": 1, "name": "Alice"},
+    {"id": 2, "name": "Bob"}
+]
+
+# Nested Mutable Structure (Note: The outer container is mutable, inner ones are immutable unless specified)
+let complex_mut: list_mut = ListMutable([
+    {"x": 1, "y": 2},
+    {"x": 3, "y": 4}
+])
+```
+
 ## Package Management
 
 Pyro uses a distributed package management system similar to Go.
@@ -127,3 +192,42 @@ lib_function()
 ```
 
 For more details on packages, see [Package Management](packages.md).
+
+## Type System & OOP
+
+Pyro supports modern type system features including Structs, Interfaces, and Type Aliases.
+
+### Type Aliases
+
+Use `type` to create cleaner names for complex types.
+
+```python
+type UserID = int
+let id: UserID = 12345
+```
+
+### Structs
+
+Define the shape of your data using `struct`.
+
+```python
+struct Point {
+    x: int
+    y: int
+}
+```
+
+### Interfaces
+
+Define behavior contracts using `interface`. Pyro interfaces are satisfied implicitly.
+
+```python
+interface Printer {
+    def print_details() -> string
+}
+
+# If a struct has a method 'print_details() -> string', 
+# it can be used wherever a 'Printer' is expected.
+```
+
+For a complete reference, check out [Type System Reference](types.md).
