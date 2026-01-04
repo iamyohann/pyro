@@ -5,6 +5,16 @@
 
 Pyro is a new programming language designed to be as simple as Python but with the performance and safety of Rust.
 
+
+## Installation
+
+### Homebrew
+
+```bash
+brew tap iamyohann/pyro
+brew install pyro
+```
+
 ## Example usage
 
 ```bash

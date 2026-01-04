@@ -1,0 +1,79 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-tap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Release Assets
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          version: tags/${{ github.event.release.tag_name }}
+          file: "pyro-v*-*.tar.gz"
+          regex: true
+          target: "assets/"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate SHA256 and Update Formula
+        id: update
+        run: |
+          TAG_NAME=${{ github.event.release.tag_name }}
+          VERSION=${TAG_NAME#v}
+          
+          # Calculate SHAs
+          SHA_MAC_INTEL=$(sha256sum assets/pyro-${TAG_NAME}-x86_64-apple-darwin.tar.gz | awk '{print $1}')
+          # Note: If artifacts are missing (e.g. build failed), this will be empty/fail. 
+          # Ideally, you'd check file existence, but for now we assume release succeeded.
+          SHA_MAC_ARM=$(sha256sum assets/pyro-${TAG_NAME}-aarch64-apple-darwin.tar.gz | awk '{print $1}')
+          SHA_LINUX=$(sha256sum assets/pyro-${TAG_NAME}-x86_64-unknown-linux-gnu.tar.gz | awk '{print $1}')
+
+          # Generate Formula Content
+          # Writing to Formula/pyro.rb directly in the checked-out repo
+          cat > Formula/pyro.rb <<EOF
+          class Pyro < Formula
+            desc "The Pyro programming language and CLI"
+            homepage "https://github.com/iamyohann/pyro"
+            version "${VERSION}"
+          
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/iamyohann/pyro/releases/download/${TAG_NAME}/pyro-${TAG_NAME}-x86_64-apple-darwin.tar.gz"
+                sha256 "${SHA_MAC_INTEL}"
+              end
+              if Hardware::CPU.arm?
+                url "https://github.com/iamyohann/pyro/releases/download/${TAG_NAME}/pyro-${TAG_NAME}-aarch64-apple-darwin.tar.gz"
+                sha256 "${SHA_MAC_ARM}"
+              end
+            end
+          
+            on_linux do
+              url "https://github.com/iamyohann/pyro/releases/download/${TAG_NAME}/pyro-${TAG_NAME}-x86_64-unknown-linux-gnu.tar.gz"
+              sha256 "${SHA_LINUX}"
+            end
+          
+            def install
+              bin.install "pyro"
+            end
+          end
+          EOF
+
+      - name: Commit and Push
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Formula/pyro.rb
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update homebrew formula to ${{ github.event.release.tag_name }}"
+            git push
+          fi

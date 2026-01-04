@@ -35,6 +35,27 @@ pyro run src/main.pyro
 
 You should see: `Hello, Pyro!`
 
+### 3. Compile to Binary
+
+To compile your Pyro project into a highly efficient native binary:
+
+```bash
+pyro build src/main.pyro
+```
+
+This generates a standalone executable (e.g., `./main` or named after the file) that you can run directly without the pyro CLI:
+
+```bash
+./main
+```
+
+You can also specify the output filename using the `--output` (or `-o`) flag:
+
+```bash
+pyro build src/main.pyro --output my_app
+./my_app
+```
+
 ## Language Basics
 
 ### Variables
