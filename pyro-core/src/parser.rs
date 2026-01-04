@@ -36,7 +36,9 @@ impl<'a> Parser<'a> {
             Some(Token::Def) => self.parse_fn_decl(),
             Some(Token::Return) => self.parse_return(),
             Some(Token::If) => self.parse_if(),
+
             Some(Token::While) => self.parse_while(),
+            Some(Token::Import) => self.parse_import(),
             _ => {
                 let expr = self.parse_expression()?;
                 
@@ -403,5 +405,19 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(stmts)
+    }
+    fn parse_import(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume import
+        
+        let path = match self.tokens.next() {
+            Some(Token::StringLiteral(s)) => s.clone(),
+            _ => return Err("Expected string literal after import".to_string()),
+        };
+
+        if let Some(Token::Newline) = self.tokens.peek() {
+            self.tokens.next();
+        }
+
+        Ok(Stmt::Import(path))
     }
 }

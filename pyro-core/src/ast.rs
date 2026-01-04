@@ -70,6 +70,7 @@ pub enum Stmt {
         body: Vec<Stmt>,
     },
     Return(Option<Expr>),
+    Import(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

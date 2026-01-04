@@ -92,6 +92,10 @@ impl Interpreter {
             Stmt::FnDecl { name, params, body, .. } => {
                 self.globals.insert(name, Value::Function { params, body: Rc::new(body) });
             }
+            Stmt::Import(path) => {
+                println!("Importing module: {}", path);
+                // Implementation will come with module resolution
+            }
         }
         Ok(None)
     }

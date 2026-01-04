@@ -15,6 +15,7 @@ pub enum Token {
     Enum,
     Match,
     Case,
+    Import,
 
     // Identifiers and Literals
     Identifier(String),
@@ -213,6 +214,7 @@ impl<'a> Lexer<'a> {
             "enum" => Token::Enum,
             "match" => Token::Match,
             "case" => Token::Case,
+            "import" => Token::Import,
             _ => Token::Identifier(ident),
         }
     }
