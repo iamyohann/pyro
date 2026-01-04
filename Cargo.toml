@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "pyro-core",
+    "pyro-cli",
+]
+
+resolver = "2"

@@ -1,0 +1,17 @@
+let x: int = 10
+let y: int = 20
+
+def add(a: int, b: int) -> int:
+    return a + b
+
+if x < y:
+    print("x is smaller")
+    print(add(x, y))
+else:
+    print("x is bigger")
+
+let i: int = 3
+while i > 0:
+    print(i)
+    i = i - 1
+print("Blastoff!")
