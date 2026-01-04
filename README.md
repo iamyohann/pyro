@@ -25,6 +25,11 @@ cargo run -p pyro-cli -- run examples/hello.pyro
 
 See [docs/tutorial.md](docs/tutorial.md).
 
+## Documentation
+- [Tutorial](docs/tutorial.md)
+- [Type System Reference](docs/types.md)
+- [Package Management](docs/packages.md)
+
 ## Features
 - **Syntax**: Python-like (indentation-based).
 - **Type System**: Strong, static typing with inference (Rust-inspired).
