@@ -43,6 +43,10 @@ pub enum Expr {
         op: BinaryOp,
         right: Box<Expr>,
     },
+    Get {
+        object: Box<Expr>,
+        name: String,
+    },
     Call {
         function: Box<Expr>,
         args: Vec<Expr>,

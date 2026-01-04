@@ -38,6 +38,7 @@ pub enum Token {
     Greater,     // >
     GreaterEqual,// >=
     Colon,
+    Dot,         // .
     Arrow,       // ->
     Pipe,        // |
     Comma,
@@ -132,6 +133,24 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 ':' => { self.input.next(); tokens.push(Token::Colon); }
+                '.' => {
+                    // Check if it's a digit next (float starting with .)
+                     // Actually parser usually handles numbers starting with . differently or not at all.
+                     // But here we have `input.peek()`
+                     // If we want to support `.5`, we need to check next char.
+                     // The `read_number` logic assumes it starts with digit.
+                     // Python allows `.5`.
+                     // Let's see if next is digit.
+                     // Let's see if next is digit.
+                     // We can't peek 2 ahead easily with Peekable<Chars>.
+                     // Just emit Dot for now. A number starting with dot can be tricky without lookahead.
+                     // In `read_number` we handle `.` if it follows digits.
+                     // So `1.2` works. `.5` might be tokenized as Dot Integer(5)?
+                     // For simplicity, let's treat `.` as Dot token unless we implement specific float parsing here.
+                     // Users can write `0.5`.
+                     self.input.next(); 
+                     tokens.push(Token::Dot); 
+                }
                 '|' => { self.input.next(); tokens.push(Token::Pipe); }
                 ',' => { self.input.next(); tokens.push(Token::Comma); }
                 '(' => { self.input.next(); tokens.push(Token::LParen); }
@@ -238,6 +257,40 @@ impl<'a> Lexer<'a> {
                 number_str.push(c);
                 self.input.next();
             } else if c == '.' && !is_float {
+                // We need to be careful here. If we have `1.method()`, is that float `1.` or integer `1` then `.`?
+                // Usually `1.` is float. `1..` is range (not supported yet). `1.method()` is float method?
+                // Most langs require `(1).method()` or `1.0.method()`.
+                // Let's assume greedy matching for float. `1.2` is float.
+                // If next char is not digit, then `.` should probably terminate number?
+                // But `peek` just sees one char.
+                // We can't see the char *after* dot here easily without looking ahead 2.
+                // But wait, `read_number` is called when we see a digit.
+                // We consume digits. Then we see `.`.
+                // If we consume `.`, we commit to float.
+                // The issue: `obj.0` isn't valid syntax usually. `arr.0` (tuple index) might be.
+                // `1.foo()` -> `1.` is float? No, `1.` is valid float. `foo` is identifier? 
+                // `1.foo` -> float `1.` then `foo`? 
+                // Rust requires `1.method` to be `(1).method` or `1.0.method`.
+                // Let's implement peek check: if '.' is followed by digit, consume it.
+                // Otherwise stop.
+                
+                // This is hard with just `peek()`.
+                // We can consume `.`, then check peek. If not digit, we sort of messed up if we wanted it to be a specific token?
+                // Actually if we consume `.`, and next is not digit, then we produce `Token::Float` like `1.`
+                // Then next token is identifier `foo`. So `1.foo` -> `Float(1.0)`, `Identifier(foo)`.
+                // That parses as two tokens next to each other.
+                // That's syntax error usually.
+                // BUT `list.length`. `list` is Identifier. `.` is Dot.
+                // So this `read_number` is only for when we started with digit.
+                
+                // Improved logic:
+                // If `c` is `.`:
+                //   If next char (peek) is digit, valid float (e.g. `1.2`).
+                //   If next char is not digit, is it valid float `1.`? Yes.
+                //   So `1. method` -> `Float(1.0)`, `Warning/Error` in parser?
+                //   Or `1.method` -> `Integer(1)`, `Dot`, `Identifier`.
+                // Rust tokenizes `1.foo` as `1.0` then `foo`.
+                // We will stick to simple greedy float: if we see `.`, we take it.
                 is_float = true;
                 number_str.push(c);
                 self.input.next();
@@ -247,6 +300,7 @@ impl<'a> Lexer<'a> {
         }
 
         if is_float {
+            // Check if it ends with `.`. If so, it might be ambiguous but for now it's float 1.0
             Token::Float(number_str.parse().unwrap())
         } else {
             Token::Integer(number_str.parse().unwrap())

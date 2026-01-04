@@ -273,6 +273,49 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<Expr, String> {
+        let mut expr = self.parse_atom()?;
+
+        loop {
+            if let Some(Token::LParen) = self.tokens.peek() {
+                self.tokens.next(); // consume (
+                let mut args = Vec::new();
+                if let Some(Token::RParen) = self.tokens.peek() {
+                    self.tokens.next();
+                } else {
+                    loop {
+                        args.push(self.parse_expression()?);
+                        match self.tokens.peek() {
+                            Some(Token::Comma) => { self.tokens.next(); }
+                            Some(Token::RParen) => {
+                                self.tokens.next();
+                                break;
+                            }
+                            _ => return Err("Expected ',' or ')' in argument list".to_string()),
+                        }
+                    }
+                }
+                expr = Expr::Call {
+                    function: Box::new(expr),
+                    args,
+                };
+            } else if let Some(Token::Dot) = self.tokens.peek() {
+                self.tokens.next(); // consume .
+                let name = match self.tokens.next() {
+                    Some(Token::Identifier(s)) => s.clone(),
+                    _ => return Err("Expected property name after '.'".to_string()),
+                };
+                expr = Expr::Get {
+                    object: Box::new(expr),
+                    name,
+                };
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn parse_atom(&mut self) -> Result<Expr, String> {
         match self.tokens.peek() {
             Some(Token::Integer(i)) => {
                 let val = *i;
@@ -292,32 +335,7 @@ impl<'a> Parser<'a> {
             Some(Token::Identifier(s)) => {
                 let name = s.clone();
                 self.tokens.next();
-                if let Some(Token::LParen) = self.tokens.peek() {
-                    // Function call
-                    self.tokens.next();
-                    let mut args = Vec::new();
-                    if let Some(Token::RParen) = self.tokens.peek() {
-                        self.tokens.next();
-                    } else {
-                        loop {
-                            args.push(self.parse_expression()?);
-                            match self.tokens.peek() {
-                                Some(Token::Comma) => { self.tokens.next(); }
-                                Some(Token::RParen) => {
-                                    self.tokens.next();
-                                    break;
-                                }
-                                _ => return Err("Expected ',' or ')' in argument list".to_string()),
-                            }
-                        }
-                    }
-                    Ok(Expr::Call {
-                        function: Box::new(Expr::Identifier(name)),
-                        args,
-                    })
-                } else {
-                    Ok(Expr::Identifier(name))
-                }
+                Ok(Expr::Identifier(name))
             }
             Some(Token::LParen) => {
                 self.tokens.next(); // (

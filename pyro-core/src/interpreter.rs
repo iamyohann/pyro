@@ -26,6 +26,11 @@ pub enum Value {
     SetMutable(Rc<RefCell<Vec<Value>>>),
     DictMutable(Rc<RefCell<Vec<(Value, Value)>>>),
     
+    BuiltinMethod {
+        object: Box<Value>,
+        name: String,
+    },
+
     Void,
 }
 
@@ -162,6 +167,13 @@ impl Interpreter {
                 
                 self.globals.get(&name).cloned().ok_or_else(|| format!("Undefined variable: {}", name))
             }
+            Expr::Get { object, name } => {
+                let obj_val = self.evaluate(*object)?;
+                Ok(Value::BuiltinMethod {
+                    object: Box::new(obj_val),
+                    name,
+                })
+            }
             Expr::Binary { left, op, right } => {
                 let l = self.evaluate(*left)?;
                 let r = self.evaluate(*right)?;
@@ -237,9 +249,209 @@ impl Interpreter {
                         let result = self.run((*body).clone())?;
                         Ok(result.unwrap_or(Value::Void))
                     }
+                    Value::BuiltinMethod { object, name } => {
+                        let mut evaluated_args = Vec::new();
+                        for arg in args {
+                            evaluated_args.push(self.evaluate(arg)?);
+                        }
+                        self.call_method(*object, &name, evaluated_args)
+                    }
                     _ => Err("Not a function".to_string()),
                 }
             }
+        }
+    }
+
+    fn call_method(&mut self, object: Value, name: &str, args: Vec<Value>) -> Result<Value, String> {
+        match object {
+            Value::ListMutable(list_rc) => {
+                let mut list = list_rc.borrow_mut();
+                match name {
+                    "push" => {
+                        if args.len() != 1 { return Err("push expects 1 argument".to_string()); }
+                        list.push(args[0].clone());
+                        Ok(Value::Void)
+                    }
+                    "pop" => {
+                        if !args.is_empty() { return Err("pop expects 0 arguments".to_string()); }
+                        Ok(list.pop().unwrap_or(Value::Void))
+                    }
+                    "len" => Ok(Value::Int(list.len() as i64)),
+                    "clear" => {
+                        list.clear();
+                        Ok(Value::Void)
+                    }
+                    "insert" => {
+                        if args.len() != 2 { return Err("insert expects 2 arguments: index, value".to_string()); }
+                        match args[0] {
+                            Value::Int(idx) => {
+                                let idx = idx as usize;
+                                if idx > list.len() { return Err("Index out of bounds".to_string()); }
+                                list.insert(idx, args[1].clone());
+                                Ok(Value::Void)
+                            }
+                            _ => Err("insert index must be an integer".to_string()),
+                        }
+                    }
+                    "remove" => {
+                        if args.len() != 1 { return Err("remove expects 1 argument".to_string()); }
+                         if let Some(pos) = list.iter().position(|x| *x == args[0]) {
+                             list.remove(pos);
+                         }
+                         Ok(Value::Void)
+                    }
+                    "reverse" => {
+                        list.reverse();
+                        Ok(Value::Void)
+                    }
+                    _ => Err(format!("Method '{}' not found on ListMutable", name)),
+                }
+            }
+            Value::List(list_rc) => {
+                match name {
+                    "len" => Ok(Value::Int(list_rc.len() as i64)),
+                     "push" | "pop" | "clear" | "insert" | "remove" | "reverse" => {
+                        Err(format!("Cannot call '{}' on immutable List. Use ListMutable if modifications are needed.", name))
+                    }
+                    _ => Err(format!("Method '{}' not found on List", name)),
+                }
+            }
+            Value::DictMutable(dict_rc) => {
+                let mut dict = dict_rc.borrow_mut();
+                match name {
+                    "keys" => {
+                        let keys: Vec<Value> = dict.iter().map(|(k, _)| k.clone()).collect();
+                        Ok(Value::List(Rc::new(keys)))
+                    }
+                    "values" => {
+                         let vals: Vec<Value> = dict.iter().map(|(_, v)| v.clone()).collect();
+                         Ok(Value::List(Rc::new(vals)))
+                    }
+                    "items" => {
+                         let items: Vec<Value> = dict.iter().map(|(k, v)| {
+                             Value::Tuple(Rc::new(vec![k.clone(), v.clone()]))
+                         }).collect();
+                         Ok(Value::List(Rc::new(items)))
+                    }
+                    "len" => Ok(Value::Int(dict.len() as i64)),
+                    "clear" => {
+                        dict.clear();
+                        Ok(Value::Void)
+                    }
+                    "remove" => {
+                        if args.len() != 1 { return Err("remove expects 1 argument (key)".to_string()); }
+                        let key = &args[0];
+                         if let Some(pos) = dict.iter().position(|(k, _)| k == key) {
+                             dict.remove(pos);
+                         }
+                         Ok(Value::Void)
+                    }
+                    "get" => {
+                        if args.len() != 1 { return Err("get expects 1 argument (key)".to_string()); }
+                        let key = &args[0];
+                        for (k, v) in dict.iter() {
+                            if k == key {
+                                return Ok(v.clone());
+                            }
+                        }
+                        Ok(Value::Void)
+                    }
+                    _ => Err(format!("Method '{}' not found on DictMutable", name)),
+                }
+            }
+             Value::Dict(dict_rc) => {
+                 match name {
+                    "keys" => {
+                        let keys: Vec<Value> = dict_rc.iter().map(|(k, _)| k.clone()).collect();
+                        Ok(Value::List(Rc::new(keys)))
+                    }
+                    "values" => {
+                         let vals: Vec<Value> = dict_rc.iter().map(|(_, v)| v.clone()).collect();
+                         Ok(Value::List(Rc::new(vals)))
+                    }
+                    "items" => {
+                         let items: Vec<Value> = dict_rc.iter().map(|(k, v)| {
+                             Value::Tuple(Rc::new(vec![k.clone(), v.clone()]))
+                         }).collect();
+                         Ok(Value::List(Rc::new(items)))
+                    }
+                    "len" => Ok(Value::Int(dict_rc.len() as i64)),
+                    "get" => {
+                         if args.len() != 1 { return Err("get expects 1 argument (key)".to_string()); }
+                        let key = &args[0];
+                        for (k, v) in dict_rc.iter() {
+                            if k == key {
+                                return Ok(v.clone());
+                            }
+                        }
+                        Ok(Value::Void)
+                    }
+                    _ => Err(format!("Method '{}' not found on Dict", name)),
+                }
+            }
+            Value::SetMutable(set_rc) => {
+                let mut set = set_rc.borrow_mut();
+                match name {
+                    "add" => {
+                         if args.len() != 1 { return Err("add expects 1 argument".to_string()); }
+                         if !set.contains(&args[0]) {
+                             set.push(args[0].clone());
+                         }
+                         Ok(Value::Void)
+                    }
+                    "remove" => {
+                        if args.len() != 1 { return Err("remove expects 1 argument".to_string()); }
+                        if let Some(pos) = set.iter().position(|x| *x == args[0]) {
+                             set.remove(pos);
+                        }
+                        Ok(Value::Void)
+                    }
+                    "contains" => {
+                         if args.len() != 1 { return Err("contains expects 1 argument".to_string()); }
+                         Ok(Value::Bool(set.contains(&args[0])))
+                    }
+                    "len" => Ok(Value::Int(set.len() as i64)),
+                    _ => Err(format!("Method '{}' not found on SetMutable", name)),
+                }
+            }
+            Value::Set(set_rc) => {
+                match name {
+                    "contains" => {
+                         if args.len() != 1 { return Err("contains expects 1 argument".to_string()); }
+                         Ok(Value::Bool(set_rc.contains(&args[0])))
+                    }
+                    "len" => Ok(Value::Int(set_rc.len() as i64)),
+                    _ => Err(format!("Method '{}' not found on Set", name)),
+                }
+            }
+            Value::String(s) => {
+                match name {
+                    "len" => Ok(Value::Int(s.len() as i64)),
+                    "upper" => Ok(Value::String(Rc::new(s.to_uppercase()))),
+                    "lower" => Ok(Value::String(Rc::new(s.to_lowercase()))),
+                    "split" => {
+                         if args.len() != 1 { return Err("split expects 1 argument (delimiter)".to_string()); }
+                         match &args[0] {
+                             Value::String(delim) => {
+                                 let parts: Vec<Value> = s.split(delim.as_str())
+                                     .map(|p| Value::String(Rc::new(p.to_string())))
+                                     .collect();
+                                 Ok(Value::List(Rc::new(parts)))
+                             }
+                             _ => Err("split expects a string delimiter".to_string()),
+                         }
+                    }
+                    "contains" => {
+                         if args.len() != 1 { return Err("contains expects 1 argument".to_string()); }
+                         match &args[0] {
+                             Value::String(sub) => Ok(Value::Bool(s.contains(sub.as_str()))),
+                             _ => Err("contains argument must be a string".to_string()),
+                         }
+                    }
+                    _ => Err(format!("Method '{}' not found on String", name)),
+                }
+            }
+             _ => Err(format!("Type does not support method '{}'", name)),
         }
     }
 }

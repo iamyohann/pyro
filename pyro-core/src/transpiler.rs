@@ -170,6 +170,7 @@ impl Transpiler {
                 }
                 self.output.push_str(")");
             }
+            Expr::Get { .. } => todo!("Transpilation for methods not implemented"),
             Expr::List(elements) => {
                  self.output.push_str("vec![");
                  for (i, e) in elements.iter().enumerate() {

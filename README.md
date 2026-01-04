@@ -30,6 +30,7 @@ See [docs/tutorial.md](docs/tutorial.md).
 - [Type System Reference](docs/types.md)
 - [Generics](docs/generics.md)
 - [Package Management](docs/packages.md)
+- [Data Structures](docs/datastructures.md)
 
 ## Features
 - **Syntax**: Python-like (indentation-based).
