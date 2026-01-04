@@ -11,8 +11,8 @@ Pyro is a new programming language designed to be as simple as Python but with t
 ### Homebrew
 
 ```bash
-brew tap iamyohann/pyro
-brew install pyro
+brew tap iamyohann/pyro https://github.com/iamyohann/pyro
+brew install --HEAD pyro
 ```
 
 ## Example usage
