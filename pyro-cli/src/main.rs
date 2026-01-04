@@ -10,6 +10,7 @@ use pyro_core::parser::Parser as PyroParser;
 
 mod cmd;
 mod util;
+mod manifest;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -40,7 +41,18 @@ enum Commands {
         /// Optional output path
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Target output format (binary or rust)
+        #[arg(short, long, default_value = "binary")]
+        target: BuildTarget,
     },
+    /// Install dependencies
+    Install,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum BuildTarget {
+    Binary,
+    Rust,
 }
 
 #[derive(Subcommand)]
@@ -75,8 +87,11 @@ fn main() -> Result<()> {
         Commands::Get { url } => {
             cmd::get::r#impl(url.clone())?;
         }
-        Commands::Build { file, output } => {
-            cmd::build::r#impl(file.clone(), output.clone())?;
+        Commands::Install => {
+            cmd::installer::r#impl()?;
+        }
+        Commands::Build { file, output, target } => {
+            cmd::build::r#impl(file.clone(), output.clone(), target.clone())?;
         }
     }
 

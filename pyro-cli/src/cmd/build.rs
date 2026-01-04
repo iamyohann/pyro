@@ -7,7 +7,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub fn r#impl(file: PathBuf, output: Option<PathBuf>) -> Result<()> {
+use crate::BuildTarget;
+
+pub fn r#impl(file: PathBuf, output: Option<PathBuf>, target: BuildTarget) -> Result<()> {
     println!("Building {:?}", file);
 
     let mut statements = Vec::new();
@@ -48,11 +50,25 @@ fn main() {{
     }
     fs::create_dir_all(build_dir.join("src"))?;
 
-    // Write Main.rs
-    fs::write(build_dir.join("src/main.rs"), full_rs)?;
+    match target {
+        BuildTarget::Rust => {
+             // Copy binary
+            let dest = if let Some(out) = output {
+                out
+            } else {
+                let bin_name = file.file_stem().unwrap().to_str().unwrap();
+                PathBuf::from(format!("{}.rs", bin_name))
+            };
+            
+            fs::write(&dest, full_rs)?;
+            println!("Transpilation successful! Rust file created: {:?}", dest);
+        }
+        BuildTarget::Binary => {
+            // Write Main.rs
+            fs::write(build_dir.join("src/main.rs"), full_rs)?;
 
-    // Write Cargo.toml
-    let cargo_toml = r#"[package]
+            // Write Cargo.toml
+            let cargo_toml = r#"[package]
 name = "pyro_program"
 version = "0.1.0"
 edition = "2021"
@@ -61,32 +77,37 @@ edition = "2021"
 
 [dependencies]
 "#;
-    fs::write(build_dir.join("Cargo.toml"), cargo_toml)?;
+            fs::write(build_dir.join("Cargo.toml"), cargo_toml)?;
 
-    println!("Compiling to native binary...");
-    
-    let status = Command::new("cargo")
-        .arg("build")
-        .arg("--release")
-        .current_dir(&build_dir)
-        .status()
-        .context("Failed to run cargo build")?;
+            fs::write(build_dir.join("Cargo.toml"), cargo_toml)?;
 
-    if !status.success() {
-        anyhow::bail!("Compilation failed");
+            println!("Compiling to native binary...");
+            
+            let abs_build_dir = build_dir.canonicalize()?;
+            let status = Command::new("cargo")
+                .arg("build")
+                .arg("--release")
+                .current_dir(&abs_build_dir)
+                .status()
+                .context("Failed to run cargo build")?;
+
+            if !status.success() {
+                anyhow::bail!("Compilation failed");
+            }
+
+            // Copy binary
+            let dest = if let Some(out) = output {
+                out
+            } else {
+                let bin_name = file.file_stem().unwrap().to_str().unwrap();
+                PathBuf::from(bin_name)
+            };
+            
+            fs::copy(build_dir.join("target/release/pyro_program"), &dest)?;
+
+            println!("Build successful! Binary created: {:?}", dest);
+        }
     }
-
-    // Copy binary
-    let dest = if let Some(out) = output {
-        out
-    } else {
-        let bin_name = file.file_stem().unwrap().to_str().unwrap();
-        PathBuf::from(bin_name)
-    };
-    
-    fs::copy(build_dir.join("target/release/pyro_program"), &dest)?;
-
-    println!("Build successful! Binary created: {:?}", dest);
 
     Ok(())
 }

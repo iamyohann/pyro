@@ -1,54 +1,44 @@
 use anyhow::{Context, Result};
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+use crate::manifest::{Manifest, LockFile};
+use crate::cmd::installer::resolve_package;
 
 pub fn r#impl(url: String) -> Result<()> {
-    println!("Getting package: {}", url);
+    
+    // Parse url for version: url@version
+    let (clean_url, version) = if let Some((u, v)) = url.split_once('@') {
+        (u.to_string(), v.to_string())
+    } else {
+        (url, "HEAD".to_string())
+    };
 
-    // Naive URL parsing
-    // github.com/user/repo -> ~/.pyro/pkg/github.com/user/repo
-    // https://github.com/user/repo -> error or handle?
-    // Let's assume the user passes "github.com/user/repo" for now as per Go style.
+    println!("Getting package: {} version: {}", clean_url, version);
+
+    // 1. Load Manifest
+    let mut manifest = Manifest::load().context("Could not find pyro.mod. Run 'pyro mod init' first.")?;
     
-    let home = std::env::var("HOME").context("Could not find HOME directory")?;
-    let mut dest = PathBuf::from(home);
-    dest.push(".pyro");
-    dest.push("pkg");
-    
-    // Normalize url
-    let parts: Vec<&str> = url.split('/').collect();
-    if parts.len() < 3 {
-        anyhow::bail!("Invalid package path. Expected format: host/user/repo");
-    }
-    
-    for part in &parts {
-        dest.push(part);
-    }
-    
-    if dest.exists() {
-        println!("Package already exists at {:?}", dest);
-        // git pull?
-        return Ok(());
+    if manifest.dependencies.contains_key(&clean_url) {
+        println!("Package {} already in pyro.mod", clean_url);
+        // We could update version here if different
     }
 
-    fs::create_dir_all(dest.parent().unwrap())?;
-
-    let git_url = format!("https://{}", url);
-
-    println!("Cloning {} into {:?}", git_url, dest);
-
-    let status = Command::new("git")
-        .arg("clone")
-        .arg(&git_url)
-        .arg(dest.to_str().unwrap())
-        .status()
-        .context("Failed to execute git clone")?;
-
-    if !status.success() {
-        anyhow::bail!("Git clone failed");
+    // 2. Resolve package (Download, Checkout, Checksum)
+    let lock_pkg = resolve_package(&clean_url, &version)?;
+    
+    // 3. Update Manifest
+    manifest.dependencies.insert(clean_url.clone(), version.clone()); // store the requested version (e.g. HEAD or v1.0)
+    manifest.save()?;
+    
+    // 4. Update Lockfile
+    let mut lockfile = LockFile::load()?;
+    
+    // Remove existing entry if any
+    if let Some(pos) = lockfile.package.iter().position(|p| p.name == clean_url) {
+        lockfile.package.remove(pos);
     }
-
-    println!("Package installed successfully.");
+    
+    lockfile.package.push(lock_pkg);
+    lockfile.save()?;
+    
+    println!("Package {} added.", clean_url);
     Ok(())
 }

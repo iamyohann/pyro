@@ -53,8 +53,19 @@ You can also specify the output filename using the `--output` (or `-o`) flag:
 
 ```bash
 pyro build src/main.pyro --output my_app
+pyro build src/main.pyro --output my_app
 ./my_app
 ```
+
+### 4. Transpile to Rust
+
+You can also transpile your Pyro code to Rust for debugging or integration purposes:
+
+```bash
+pyro build src/main.pyro --target rust --output app.rs
+```
+
+This will generate a Rust source file that contains the transpiled code.
 
 ## Language Basics
 

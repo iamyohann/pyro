@@ -4,7 +4,7 @@ use pyro_core::lexer::Lexer;
 use pyro_core::parser::Parser as PyroParser;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub fn process_file(path: PathBuf, loaded: &mut HashSet<PathBuf>, statements: &mut Vec<Stmt>) -> Result<()> {
     // Canonicalize path to handle relative paths correctly and deduplicate
