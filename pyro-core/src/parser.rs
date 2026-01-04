@@ -104,25 +104,86 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type(&mut self) -> Result<Type, String> {
+        let first_type = self.parse_single_type()?;
+        
+        // Check for Union |
+        if let Some(Token::Pipe) = self.tokens.peek() {
+            let mut types = vec![first_type];
+            while let Some(Token::Pipe) = self.tokens.peek() {
+                self.tokens.next(); // consume |
+                types.push(self.parse_single_type()?);
+            }
+            Ok(Type::Union(types))
+        } else {
+            Ok(first_type)
+        }
+    }
+
+    fn parse_single_type(&mut self) -> Result<Type, String> {
         match self.tokens.next() {
-            Some(Token::Identifier(s)) => match s.as_str() {
-                "int" => Ok(Type::Int),
-                "float" => Ok(Type::Float),
-                "bool" => Ok(Type::Bool),
-                "string" => Ok(Type::String),
-                "void" => Ok(Type::Void),
-                "list" => Ok(Type::List),
-                "tuple" => Ok(Type::Tuple),
-                "set" => Ok(Type::Set),
-                "dict" => Ok(Type::Dict),
-                "list_mut" => Ok(Type::ListMutable),
-                "tuple_mut" => Ok(Type::TupleMutable),
-                "set_mut" => Ok(Type::SetMutable),
-                "dict_mut" => Ok(Type::DictMutable),
-                _ => Ok(Type::UserDefined(s.clone())),
-            },
+            Some(Token::Identifier(s)) => {
+                let name = s.clone();
+                match name.as_str() {
+                    "int" => Ok(Type::Int),
+                    "float" => Ok(Type::Float),
+                    "bool" => Ok(Type::Bool),
+                    "string" => Ok(Type::String),
+                    "void" => Ok(Type::Void),
+                    "list" => Ok(Type::List),
+                    "tuple" => Ok(Type::Tuple),
+                    "set" => Ok(Type::Set),
+                    "dict" => Ok(Type::Dict),
+                    "list_mut" => Ok(Type::ListMutable),
+                    "tuple_mut" => Ok(Type::TupleMutable),
+                    "set_mut" => Ok(Type::SetMutable),
+                    "dict_mut" => Ok(Type::DictMutable),
+                    _ => {
+                        // Check for generic arguments <T, U>
+                        let mut generics = Vec::new();
+                        if let Some(Token::Less) = self.tokens.peek() {
+                            self.tokens.next(); // consume <
+                            loop {
+                                generics.push(self.parse_type()?);
+                                match self.tokens.peek() {
+                                    Some(Token::Comma) => { self.tokens.next(); }
+                                    Some(Token::Greater) => {
+                                        self.tokens.next();
+                                        break;
+                                    }
+                                    _ => return Err("Expected ',' or '>' in generic type args".to_string()),
+                                }
+                            }
+                        }
+                        Ok(Type::UserDefined(name, generics))
+                    },
+                }
+            }
             _ => Err("Expected type identifier".to_string()),
         }
+    }
+    
+    // Parse generic parameters definition: <T, U>
+    fn parse_generic_params(&mut self) -> Result<Vec<String>, String> {
+        let mut params = Vec::new();
+        if let Some(Token::Less) = self.tokens.peek() {
+            self.tokens.next(); // consume <
+            loop {
+                match self.tokens.next() {
+                    Some(Token::Identifier(s)) => params.push(s.clone()),
+                    _ => return Err("Expected generic parameter name".to_string()),
+                }
+                
+                match self.tokens.peek() {
+                    Some(Token::Comma) => { self.tokens.next(); }
+                    Some(Token::Greater) => {
+                        self.tokens.next();
+                        break;
+                    }
+                    _ => return Err("Expected ',' or '>' in generic parameters".to_string()),
+                }
+            }
+        }
+        Ok(params)
     }
 
     fn parse_expression(&mut self) -> Result<Expr, String> {
@@ -448,6 +509,8 @@ impl<'a> Parser<'a> {
             _ => return Err("Expected function name".to_string()),
         };
 
+        let generics = self.parse_generic_params()?;
+
         if let Some(Token::LParen) = self.tokens.next() {} else {
              return Err("Expected '('".to_string());
         }
@@ -485,7 +548,7 @@ impl<'a> Parser<'a> {
 
         let body = self.parse_block()?;
 
-        Ok(Stmt::FnDecl { name, params, return_type, body })
+        Ok(Stmt::FnDecl { name, generics, params, return_type, body })
     }
 
     fn parse_return(&mut self) -> Result<Stmt, String> {
@@ -548,6 +611,8 @@ impl<'a> Parser<'a> {
             _ => return Err("Expected struct name".to_string()),
         };
 
+        let generics = self.parse_generic_params()?;
+
         if let Some(Token::LBrace) = self.tokens.next() {} else {
             return Err("Expected '{' after struct name".to_string());
         }
@@ -588,15 +653,17 @@ impl<'a> Parser<'a> {
             self.tokens.next();
         }
 
-        Ok(Stmt::StructDef { name, fields })
+        Ok(Stmt::StructDef { name, generics, fields })
     }
 
     fn parse_interface_decl(&mut self) -> Result<Stmt, String> {
         self.tokens.next(); // consume interface
-        let name = match self.tokens.next() {
+        let name =match self.tokens.next() {
             Some(Token::Identifier(s)) => s.clone(),
             _ => return Err("Expected interface name".to_string()),
         };
+
+        let generics = self.parse_generic_params()?;
 
         if let Some(Token::LBrace) = self.tokens.next() {} else {
             return Err("Expected '{'".to_string());
@@ -666,7 +733,7 @@ impl<'a> Parser<'a> {
             self.tokens.next();
         }
 
-        Ok(Stmt::InterfaceDef { name, methods })
+        Ok(Stmt::InterfaceDef { name, generics, methods })
     }
 
     fn parse_type_alias(&mut self) -> Result<Stmt, String> {
@@ -675,6 +742,8 @@ impl<'a> Parser<'a> {
             Some(Token::Identifier(s)) => s.clone(),
             _ => return Err("Expected alias name".to_string()),
         };
+
+        let generics = self.parse_generic_params()?;
 
         if let Some(Token::Equal) = self.tokens.next() {} else {
             return Err("Expected '=' in type alias".to_string());
@@ -686,6 +755,6 @@ impl<'a> Parser<'a> {
             self.tokens.next();
         }
 
-        Ok(Stmt::TypeAlias { name, alias })
+        Ok(Stmt::TypeAlias { name, generics, alias })
     }
 }

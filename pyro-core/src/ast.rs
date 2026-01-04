@@ -13,7 +13,8 @@ pub enum Type {
     TupleMutable,
     SetMutable,
     DictMutable,
-    UserDefined(String),
+    UserDefined(String, Vec<Type>),
+    Union(Vec<Type>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,6 +77,7 @@ pub enum Stmt {
     },
     FnDecl {
         name: String,
+        generics: Vec<String>,
         params: Vec<(String, Type)>,
         return_type: Type,
         body: Vec<Stmt>,
@@ -84,14 +86,17 @@ pub enum Stmt {
     Import(String),
     StructDef {
         name: String,
+        generics: Vec<String>,
         fields: Vec<(String, Type)>,
     },
     InterfaceDef {
         name: String,
+        generics: Vec<String>,
         methods: Vec<(String, Vec<(String, Type)>, Type)>,
     },
     TypeAlias {
         name: String,
+        generics: Vec<String>,
         alias: Type,
     },
 }

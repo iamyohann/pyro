@@ -75,7 +75,7 @@ impl Transpiler {
                 self.push_indent(indent);
                 self.output.push_str("}\n");
             }
-            Stmt::FnDecl { name, params, return_type, body } => {
+            Stmt::FnDecl { name, generics: _, params, return_type, body } => {
                 // Rust requires types for params. If we don't have them inferred/specified, we might have issues.
                 // Assuming AST has types populated (Parser does rudimentary parsing)
                 
@@ -229,7 +229,8 @@ impl Transpiler {
             Type::TupleMutable => "std::sync::Arc<std::sync::Mutex<Box<dyn std::any::Any>>>".to_string(),
             Type::SetMutable => "std::sync::Arc<std::sync::Mutex<std::collections::HashSet<Box<dyn std::any::Any>>>>".to_string(),
             Type::DictMutable => "std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Box<dyn std::any::Any>>>>".to_string(),
-            Type::UserDefined(s) => format!("usr_{}", s),
+            Type::UserDefined(s, _generics) => format!("usr_{}", s), // TODO: generics
+            Type::Union(_types) => "Box<dyn std::any::Any>".to_string(),
         }
     }
 }

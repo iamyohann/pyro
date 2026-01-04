@@ -11,6 +11,7 @@ pub enum Value {
     // Managed by RC
     String(Rc<String>), 
     Function {
+        generics: Vec<String>,
         params: Vec<(String, Type)>,
         body: Rc<Vec<Stmt>>,
     },
@@ -99,8 +100,8 @@ impl Interpreter {
                 let val = self.evaluate(value)?;
                 self.globals.insert(name, val);
             }
-            Stmt::FnDecl { name, params, body, .. } => {
-                self.globals.insert(name, Value::Function { params, body: Rc::new(body) });
+            Stmt::FnDecl { name, generics, params, body, .. } => {
+                self.globals.insert(name, Value::Function { generics, params, body: Rc::new(body) });
             }
             Stmt::Import(path) => {
                 println!("Importing module: {}", path);
@@ -225,7 +226,7 @@ impl Interpreter {
                 }
                 
                 match func_val {
-                    Value::Function { params, body } => {
+                    Value::Function { generics: _, params, body } => {
                         // TODO: Implement proper stack frames
                         // For now just setting globals (WRONG but works for simple script)
                         for (i, (param_name, _)) in params.iter().enumerate() {

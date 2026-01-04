@@ -28,6 +28,7 @@ See [docs/tutorial.md](docs/tutorial.md).
 ## Documentation
 - [Tutorial](docs/tutorial.md)
 - [Type System Reference](docs/types.md)
+- [Generics](docs/generics.md)
 - [Package Management](docs/packages.md)
 
 ## Features

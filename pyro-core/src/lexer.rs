@@ -39,6 +39,7 @@ pub enum Token {
     GreaterEqual,// >=
     Colon,
     Arrow,       // ->
+    Pipe,        // |
     Comma,
     LParen,
     RParen,
@@ -131,6 +132,7 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 ':' => { self.input.next(); tokens.push(Token::Colon); }
+                '|' => { self.input.next(); tokens.push(Token::Pipe); }
                 ',' => { self.input.next(); tokens.push(Token::Comma); }
                 '(' => { self.input.next(); tokens.push(Token::LParen); }
                 ')' => { self.input.next(); tokens.push(Token::RParen); }

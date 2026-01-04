@@ -1,0 +1,30 @@
+def identity<T>(x: T) -> T:
+    return x
+
+def process<T, U>(a: T, b: U):
+    print(a)
+    print(b)
+
+struct Box<T> {
+    value: T
+}
+
+struct Result<T, E> {
+    ok: T,
+    error: E
+}
+
+type ID = int | string
+
+def print_id(id: ID):
+    print(id)
+
+let x: Box<int> = { "value": 10 }
+let y: Box<string> = { "value": "hello" }
+
+print(identity(10))
+print(identity("world"))
+
+process(1, "two")
+print_id(123)
+print_id("abc")

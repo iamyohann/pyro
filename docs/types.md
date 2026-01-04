@@ -65,6 +65,16 @@ type ID = string
 let user_id: ID = "u-123"
 ```
 
+### Union Types
+Union types allow a value to be one of several types. Use the pipe `|` operator to define them.
+
+```python
+type ID = int | string
+
+let id1: ID = 123
+let id2: ID = "abc"
+```
+
 ### Structs
 Structs allow you to define custom data structures with named fields.
 
