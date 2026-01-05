@@ -32,6 +32,10 @@ pub fn process_file(path: PathBuf, loaded: &mut HashSet<PathBuf>, statements: &m
 
     for stmt in program.statements {
         if let Stmt::Import(import_path) = &stmt {
+            if import_path.starts_with("std.") {
+                statements.push(stmt.clone());
+                continue;
+            }
             let mut dep_path = PathBuf::from(import_path);
             
             // Resume resolution logic:

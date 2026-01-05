@@ -33,6 +33,7 @@ See [docs/tutorial.md](docs/tutorial.md).
 - [Package Management](docs/packages.md)
 - [Data Structures](docs/datastructures.md)
 - [Error Handling](docs/error_handling.md)
+- [Native Bindings](docs/native_bindings.md)
 
 ## Features
 - **Syntax**: Python-like (indentation-based).
@@ -40,3 +41,4 @@ See [docs/tutorial.md](docs/tutorial.md).
 - **Functional**: Automatic currying, partial application, and immutable data structures.
 - **Memory**: Automatic memory management (ARC/GC) for ease of use.
 - **Tooling**: Built-in package manager (Git-based semantics).
+- **Native Modules**: Extend Pyro with Rust.

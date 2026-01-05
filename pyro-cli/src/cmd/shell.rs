@@ -46,6 +46,13 @@ pub fn run() -> Result<()> {
                         for stmt in program.statements {
                             match stmt {
                                 Stmt::Import(path) => {
+                                    if interpreter.has_native_module(&path) {
+                                        if let Err(e) = interpreter.run(vec![Stmt::Import(path.clone())]) {
+                                            println!("Runtime Error: {:?}", e);
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle imports - reuse util logic partially but we don't need to pass statements vector
                                     // We need to execute the file side-effects into the interpreter directly.
                                     // But Interpreter::run takes a Vec<Stmt>. 

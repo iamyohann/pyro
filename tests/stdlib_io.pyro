@@ -1,0 +1,17 @@
+import std.io
+
+print("Testing std.io")
+let path = "test_file.txt"
+let content = "Hello Pyro IO"
+
+print("Writing to " + path)
+io.write_file(path, content)
+
+print("Reading from " + path)
+let read_content = io.read_file(path)
+print(read_content)
+
+if read_content == content:
+    print("IO passed")
+else:
+    print("IO failed")

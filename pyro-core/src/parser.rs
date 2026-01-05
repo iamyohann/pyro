@@ -702,10 +702,30 @@ impl<'a> Parser<'a> {
     fn parse_import(&mut self) -> Result<Stmt, String> {
         self.tokens.next(); // consume import
         
-        let path = match self.tokens.next() {
-            Some(Token::StringLiteral(s)) => s.clone(),
-            _ => return Err("Expected string literal after import".to_string()),
-        };
+        let mut path = String::new();
+        
+        if let Some(Token::StringLiteral(s)) = self.tokens.peek() {
+             path = s.clone();
+             self.tokens.next();
+        } else {
+            // Parse dotted identifier: std.math
+            loop {
+                if let Some(Token::Identifier(s)) = self.tokens.next() {
+                    if !path.is_empty() {
+                        path.push('.');
+                    }
+                    path.push_str(s);
+                } else {
+                    return Err("Expected identifier in import path".to_string());
+                }
+
+                if let Some(Token::Dot) = self.tokens.peek() {
+                    self.tokens.next();
+                } else {
+                    break;
+                }
+            }
+        }
 
         if let Some(Token::Newline) = self.tokens.peek() {
             self.tokens.next();

@@ -1,0 +1,14 @@
+import std.math
+
+print("Testing std.math")
+let val = math.sqrt(16)
+print(val)
+if val == 4.0:
+    print("sqrt(16) passed")
+else:
+    print("sqrt(16) failed")
+
+try:
+    math.sqrt(1, 2)
+except e:
+    print("Detected error as expected: " + e.message)

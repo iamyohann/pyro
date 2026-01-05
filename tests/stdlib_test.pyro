@@ -1,0 +1,26 @@
+import std.math
+import std.time
+
+print("Testing std.math...")
+print(math.sqrt(16))
+print(math.abs(-5))
+print(math.ceil(4.2))
+print(math.floor(4.8))
+print(math.round(4.5))
+print(math.pow(2, 3))
+print(math.sin(0))
+print(math.cos(0))
+
+print("Testing std.time...")
+let start = time.now()
+print("Sleeping for 0.5 seconds...")
+time.sleep(0.5)
+let end = time.now()
+let duration = end - start
+print("Slept for: ")
+print(duration)
+
+if duration >= 0.5:
+    print("Sleep test passed!")
+else:
+    print("Sleep test failed!")

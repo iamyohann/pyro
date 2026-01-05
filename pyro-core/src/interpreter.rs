@@ -3,6 +3,21 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+#[derive(Clone)]
+pub struct NativeClosure(pub Rc<dyn Fn(Vec<Value>) -> Result<Value, Value>>);
+
+impl std::fmt::Debug for NativeClosure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<native fn>")
+    }
+}
+
+impl PartialEq for NativeClosure {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
@@ -60,6 +75,12 @@ pub enum Value {
         name: String,
     },
 
+    NativeFunction {
+        name: String,
+        func: NativeClosure,
+    },
+    NativeModule(Rc<HashMap<String, Value>>),
+
     Void,
 }
 
@@ -75,6 +96,7 @@ pub struct Interpreter {
     // Nested scopes: push hashmap on entry, pop on exit
     // optimizing to single scope for now for simplicity
     globals: HashMap<String, Value>,
+    native_modules: HashMap<String, Value>,
 }
 
 impl Interpreter {
@@ -109,9 +131,20 @@ impl Interpreter {
             methods: Rc::new(error_methods),
         });
 
-        Self {
+        let mut interpreter = Self {
             globals,
-        }
+            native_modules: HashMap::new(),
+        };
+        crate::stdlib::register_std_libs(&mut interpreter);
+        interpreter
+    }
+
+    pub fn register_native_module(&mut self, name: &str, module: Value) {
+        self.native_modules.insert(name.to_string(), module);
+    }
+
+    pub fn has_native_module(&self, name: &str) -> bool {
+        self.native_modules.contains_key(name)
     }
     
     fn make_error(&self, msg: &str) -> Value {
@@ -273,7 +306,14 @@ impl Interpreter {
                 self.globals.insert(name, Value::Function { generics, params, body: Rc::new(body), partial_args: Vec::new() });
             }
             Stmt::Import(path) => {
-                println!("Importing module: {}", path);
+                if let Some(module) = self.native_modules.get(&path) {
+                    // Simple binding strategy: use the last segment as the name
+                    // e.g. "std.math" -> "math"
+                    let name = path.split('.').last().unwrap_or(&path).to_string();
+                    self.globals.insert(name, module.clone());
+                } else {
+                     println!("Warning: Module '{}' not found", path);
+                }
             }
             Stmt::RecordDef { name, generics: _, fields, methods } => {
                 let mut field_names = Vec::new();
@@ -428,6 +468,13 @@ impl Interpreter {
                     }
                     _ => {}
                 }
+
+                if let Value::NativeModule(exports) = &obj_val {
+                    if let Some(val) = exports.get(&name) {
+                        return Ok(val.clone());
+                    }
+                    return Err(self.make_error(&format!("Export '{}' not found in module", name)));
+                }
                 
                 // Fallback for built-in method hack (str.len, list.push) 
                 Ok(Value::BuiltinMethod {
@@ -453,10 +500,24 @@ impl Interpreter {
                     (Value::Int(a), BinaryOp::Lt, Value::Int(b)) => Ok(Value::Bool(a < b)),
                     (Value::Int(a), BinaryOp::Eq, Value::Int(b)) => Ok(Value::Bool(a == b)),
                     (Value::Int(a), BinaryOp::Neq, Value::Int(b)) => Ok(Value::Bool(a != b)),
+                    (Value::Int(a), BinaryOp::Gte, Value::Int(b)) => Ok(Value::Bool(a >= b)),
+                    (Value::Int(a), BinaryOp::Lte, Value::Int(b)) => Ok(Value::Bool(a <= b)),
                     (Value::String(a), BinaryOp::Add, Value::String(b)) => Ok(Value::String(Rc::new(format!("{}{}", a, b)))),
                     (Value::String(a), BinaryOp::Eq, Value::String(b)) => Ok(Value::Bool(a == b)),
                     (Value::String(a), BinaryOp::Neq, Value::String(b)) => Ok(Value::Bool(a != b)),
-                    // Add more ops
+                    
+                    // Float ops
+                    (Value::Float(a), BinaryOp::Add, Value::Float(b)) => Ok(Value::Float(a + b)),
+                    (Value::Float(a), BinaryOp::Sub, Value::Float(b)) => Ok(Value::Float(a - b)),
+                    (Value::Float(a), BinaryOp::Mul, Value::Float(b)) => Ok(Value::Float(a * b)),
+                    (Value::Float(a), BinaryOp::Div, Value::Float(b)) => Ok(Value::Float(a / b)),
+                    (Value::Float(a), BinaryOp::Gt, Value::Float(b)) => Ok(Value::Bool(a > b)),
+                    (Value::Float(a), BinaryOp::Lt, Value::Float(b)) => Ok(Value::Bool(a < b)),
+                    (Value::Float(a), BinaryOp::Eq, Value::Float(b)) => Ok(Value::Bool(a == b)),
+                    (Value::Float(a), BinaryOp::Neq, Value::Float(b)) => Ok(Value::Bool(a != b)),
+                    (Value::Float(a), BinaryOp::Gte, Value::Float(b)) => Ok(Value::Bool(a >= b)),
+                    (Value::Float(a), BinaryOp::Lte, Value::Float(b)) => Ok(Value::Bool(a <= b)),
+
                     _ => Err(self.make_error("Unsupported operation")),
                 }
             }
@@ -469,208 +530,8 @@ impl Interpreter {
                 }
                 
                 return self.apply(func_val, evaluated_args);
-                /*
-                // Hacky built-ins
-                    // Instantiate
-                    let instance = Value::Instance {
-                         class_name: name.clone(),
-                         fields: Rc::new(RefCell::new(HashMap::new())),
-                         methods: methods.clone(),
-                    };
-                    
-                    // Call __init__ if exists
-                     if let Some(init_method) = methods.get("__init__") {
-                         if let Value::Function { generics, params, body, .. } = init_method {
-                             let mut new_env = self.globals.clone(); // In reality should be scope stack
-                             // Bind self
-                             new_env.insert("self".to_string(), instance.clone());
-                             
-                             if args.len() != params.len() - 1 {
-                                 return Err(format!("__init__ expects {} arguments (excluding self), got {}", params.len() -1, args.len()));
-                             }
-                             
-                             for (i, arg_expr) in args.iter().enumerate() {
-                                 let val = self.evaluate(arg_expr.clone())?;
-                                 new_env.insert(params[i+1].0.clone(), val);
-                             }
-                             
-                             // Execute body
-                              // Save current globals
-                             let old_globals = self.globals.clone();
-                             self.globals = new_env;
-                             
-                             let result = self.run(body.to_vec());
-                             self.globals = old_globals; // Restore
-                             
-                             if let Err(e) = result { return Err(e); }
-                         }
-                     }
-                    
-                    return Ok(instance);
-                }
-                
-                // Handle BoundMethod call
-                // If func_val is a BoundMethod (wrapped instance + function), we need to handle that.
-                // Currently we don't have BoundMethod in Value enum, let's add it or handle it?
-                // Wait, Get returns the function? No, `obj.method` should return a bound method.
-                // We added BoundMethod logic yet? No.
-                
-                if let Value::BoundMethod { object, method } = func_val {
-                     if let Value::Function { generics: _, params, body, .. } = *method {
-                         let mut new_env = self.globals.clone();
-                         // Bind self
-                         new_env.insert("self".to_string(), *object);
-                         
-                         if args.len() != params.len() - 1 {
-                             return Err(format!("Method expects {} arguments (excluding self), got {}", params.len() - 1, args.len()));
-                         }
-                         
-                         for (i, arg_expr) in args.iter().enumerate() {
-                             let val = self.evaluate(arg_expr.clone())?;
-                             new_env.insert(params[i+1].0.clone(), val);
-                         }
-                         
-                         let old_globals = self.globals.clone();
-                         self.globals = new_env;
-                         let result = self.run(body.to_vec());
-                         self.globals = old_globals;
-                         
-                         if let Some(v) = result? {
-                             return Ok(v);
-                         } else {
-                             return Ok(Value::Void); // Void return if no return
-                         }
-                     }
-                     return Err("BoundMethod expects a Function".to_string());
-                }
 
-                if let Value::RecordConstructor { name, fields, .. } = func_val {
-                    if args.len() != fields.len() {
-                         return Err(format!("Record '{}' expects {} arguments, got {}", name, fields.len(), args.len()));
-                    }
-                    
-                    let mut field_values = Vec::new();
-                    for arg in args {
-                         field_values.push(self.evaluate(arg)?);
-                    }
-                    
-                    return Ok(Value::Record {
-                        name: name.clone(),
-                        fields: Rc::new(fields.clone()),
-                        values: Rc::new(field_values)
-                    });
-                }
 
-                if let Value::String(s) = &func_val {
-                    let name = s.as_str();
-                    if name == "print" {
-                        for arg in args {
-                             let v = self.evaluate(arg)?;
-                             println!("{:?}", v);
-                        }
-                        return Ok(Value::Void);
-                    }
-                    if name == "range" {
-                        if args.len() < 1 || args.len() > 3 { return Err("range expects 1 to 3 arguments".to_string()); }
-                        
-                        let mut evaluated_args = Vec::new();
-                        for arg in args {
-                             evaluated_args.push(self.evaluate(arg)?);
-                        }
-
-                        let start = if evaluated_args.len() == 1 { 0 } else { 
-                            match evaluated_args[0] { Value::Int(i) => i, _ => return Err("range start must be int".to_string()) }
-                        };
-                        let end = if evaluated_args.len() == 1 { 
-                             match evaluated_args[0] { Value::Int(i) => i, _ => return Err("range end must be int".to_string()) }
-                        } else {
-                             match evaluated_args[1] { Value::Int(i) => i, _ => return Err("range end must be int".to_string()) }
-                        };
-                        let step = if evaluated_args.len() == 3 {
-                             match evaluated_args[2] { Value::Int(i) => i, _ => return Err("range step must be int".to_string()) }
-                        } else { 1 };
-                        
-                        let mut vals = Vec::new();
-                        let mut current = start;
-                        if step == 0 { return Err("range step cannot be 0".to_string()); }
-                        if step > 0 {
-                            while current < end {
-                                vals.push(Value::Int(current));
-                                current += step;
-                            }
-                        } else {
-                             while current > end {
-                                vals.push(Value::Int(current));
-                                current += step;
-                            }
-                        }
-                        return Ok(Value::List(Rc::new(vals)));
-                    }
-                     if name == "ListMutable" {
-                         // Expect 1 arg: List
-                         if args.len() != 1 { return Err("ListMutable takes 1 argument".to_string()); }
-                         let v = self.evaluate(args[0].clone())?;
-                         match v {
-                             Value::List(l) => return Ok(Value::ListMutable(Rc::new(RefCell::new((*l).clone())))),
-                             _ => return Err("ListMutable expects a List".to_string()),
-                         }
-                    }
-                    if name == "TupleMutable" {
-                         if args.len() != 1 { return Err("TupleMutable takes 1 argument".to_string()); }
-                         let v = self.evaluate(args[0].clone())?;
-                         match v {
-                             Value::Tuple(l) => return Ok(Value::TupleMutable(Rc::new(RefCell::new((*l).clone())))),
-                             _ => return Err("TupleMutable expects a Tuple".to_string()),
-                         }
-                    }
-                    if name == "SetMutable" {
-                         if args.len() != 1 { return Err("SetMutable takes 1 argument".to_string()); }
-                         let v = self.evaluate(args[0].clone())?;
-                         match v {
-                             Value::Set(l) => return Ok(Value::SetMutable(Rc::new(RefCell::new((*l).clone())))),
-                             _ => return Err("SetMutable expects a Set".to_string()),
-                         }
-                    }
-                    if name == "DictMutable" {
-                         if args.len() != 1 { return Err("DictMutable takes 1 argument".to_string()); }
-                         let v = self.evaluate(args[0].clone())?;
-                         match v {
-                             Value::Dict(l) => return Ok(Value::DictMutable(Rc::new(RefCell::new((*l).clone())))),
-                             _ => return Err("DictMutable expects a Dict".to_string()),
-                         }
-                    }
-                }
-                
-                match func_val {
-                    Value::Function { generics: _, params, body, .. } => {
-                        // TODO: Implement proper stack frames
-                        // For now just setting globals (WRONG but works for simple script)
-                        for (i, (param_name, _)) in params.iter().enumerate() {
-                            let arg_val = self.evaluate(args[i].clone())?;
-                            self.globals.insert(param_name.clone(), arg_val);
-                        }
-                        // Clone Rc pointer
-                        let result = self.run((*body).clone());
-                        // self.globals = old_globals; // if we didn't clone globals
-                        
-                        match result {
-                            Ok(Flow::Return(v)) => Ok(v),
-                            Ok(Flow::None) => Ok(Value::Void),
-                            Ok(Flow::Break) => Err("Unexpected 'break' outside of loop".to_string()),
-                            Ok(Flow::Continue) => Err("Unexpected 'continue' outside of loop".to_string()),
-                            Err(e) => Err(e),
-                        }
-                    }
-                    Value::BuiltinMethod { object, name } => {
-                        let mut evaluated_args = Vec::new();
-                        for arg in args {
-                            evaluated_args.push(self.evaluate(arg)?);
-                        }
-                        self.call_method(*object, &name, evaluated_args)
-                    }
-                    _ => Err("Not a function".to_string()),
-                }
-                */
             }
         }
     }
@@ -982,6 +843,14 @@ impl Interpreter {
             }
             Value::BuiltinMethod { object, name } => {
                  self.call_method(*object, &name, args)
+            }
+            Value::NativeFunction { name: _, func } => {
+                (func.0)(args).map_err(|e| {
+                    if let Value::String(s) = &e {
+                        return self.make_error(s);
+                    }
+                    e
+                })
             }
             Value::String(s) => {
                  let name = s.as_str();
