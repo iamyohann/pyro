@@ -29,11 +29,13 @@ See [docs/tutorial.md](docs/tutorial.md).
 - [Tutorial](docs/tutorial.md)
 - [Type System Reference](docs/types.md)
 - [Generics](docs/generics.md)
+- [Functional Programming](docs/functional.md)
 - [Package Management](docs/packages.md)
 - [Data Structures](docs/datastructures.md)
 
 ## Features
 - **Syntax**: Python-like (indentation-based).
 - **Type System**: Strong, static typing with inference (Rust-inspired).
+- **Functional**: Automatic currying, partial application, and immutable data structures.
 - **Memory**: Automatic memory management (ARC/GC) for ease of use.
 - **Tooling**: Built-in package manager (Git-based semantics).

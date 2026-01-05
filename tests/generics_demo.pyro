@@ -5,22 +5,17 @@ def process<T, U>(a: T, b: U):
     print(a)
     print(b)
 
-struct Box<T> {
-    value: T
-}
+record Box<T>(value: T)
 
-struct Result<T, E> {
-    ok: T,
-    error: E
-}
+record Result<T, E>(ok: T, error: E)
 
 type ID = int | string
 
 def print_id(id: ID):
     print(id)
 
-let x: Box<int> = { "value": 10 }
-let y: Box<string> = { "value": "hello" }
+let x = Box(10)
+let y = Box("hello")
 
 print(identity(10))
 print(identity("world"))

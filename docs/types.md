@@ -75,18 +75,19 @@ let id1: ID = 123
 let id2: ID = "abc"
 ```
 
-### Structs
-Structs allow you to define custom data structures with named fields.
+### Records
+Records are immutable data structures with named fields and auto-generated constructors.
 
 ```python
-struct User {
-    id: int
-    name: string
-    active: bool
-}
+record User(id: int, name: string, active: bool)
 
-# Instantiation (Not yet implemented, conceptual syntax)
-# let u = User { id: 1, name: "Alice", active: true }
+# Instantiation
+let u = User(1, "Alice", true)
+
+# Records can also have methods:
+record Point(x: int, y: int):
+    def area(self) -> int:
+        return self.x * self.y
 ```
 
 ### Interfaces

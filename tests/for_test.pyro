@@ -1,0 +1,25 @@
+# Test For Loop List Iteration
+print("Testing List Iteration:")
+let l: list = [10, 20, 30]
+for x in l:
+    print(x)
+
+# Test Range (1 iter)
+print("Testing Range(3):")
+for i in range(3):
+    print(i)
+
+# Test Range (start, end)
+print("Testing Range(2, 5):")
+for j in range(2, 5):
+    print(j)
+
+# Test Range (step)
+print("Testing Range(0, 10, 2):")
+for k in range(0, 10, 2):
+    print(k)
+
+# Test Range (negative step)
+print("Testing Range(5, 0, -1):")
+for m in range(5, 0, -1):
+    print(m)

@@ -1,0 +1,21 @@
+record Rectangle(width: int, height: int):
+    def area(self) -> int:
+        return self.width * self.height
+
+    def perimeter(self) -> int:
+        return (self.width + self.height) * 2
+
+    def scale(self, factor: int) -> int:
+        return self.area() * factor
+
+let r = Rectangle(10, 20)
+print(r.width)
+print(r.height)
+print(r.area())
+print(r.perimeter())
+print(r.scale(2))
+
+# Test Currying still works
+let makeRect10 = Rectangle(10)
+let r2 = makeRect10(5)
+print(r2.area())

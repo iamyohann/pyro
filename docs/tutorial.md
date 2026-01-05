@@ -206,15 +206,26 @@ type UserID = int
 let id: UserID = 12345
 ```
 
-### Structs
+### Records
 
-Define the shape of your data using `struct`.
+Define the shape of your data using `record`. Records are immutable.
 
 ```python
-struct Point {
-    x: int
-    y: int
-}
+record Point(x: int, y: int)
+
+let p = Point(10, 20)
+print(p.x)
+```
+
+Records can also have methods:
+
+```python
+record Rect(w: int, h: int):
+    def area(self) -> int:
+        return self.w * self.h
+
+let r = Rect(10, 5)
+print(r.area())
 ```
 
 ### Interfaces

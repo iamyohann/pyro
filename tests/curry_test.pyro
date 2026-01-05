@@ -1,0 +1,21 @@
+def add(x: int, y: int) -> int:
+    return x + y
+
+print("Testing Currying:")
+let add1 = add(1)
+print(add1(2))
+print(add(10, 20))
+
+record Point(x: int, y: int)
+let makePointX10 = Point(10)
+let p = makePointX10(20)
+print(p.x)
+print(p.y)
+
+print("Testing Over-application (Chain):")
+
+def add3(x: int, y: int, z: int) -> int:
+    return x + y + z
+
+let sum = add3(1)(2)(3)
+print(sum)

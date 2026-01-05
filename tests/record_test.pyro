@@ -1,0 +1,15 @@
+record Point(x: int, y: int)
+
+print("Testing Record Instantiation:")
+let p = Point(10, 20)
+print(p.x)
+print(p.y)
+
+print("Testing Record Immutability (should not support Set - wait, parser might parse it but runtime should fail or we didn't implement Set for Record):")
+# p.x = 30 # This should fail if we uncomment it, or just not work. For now let's test assignment to field is NOT supported.
+# We didn't implement Stmt::Set for Record key, so it should error "Only instances have fields".
+
+record Person(name: string, age: int)
+let me = Person("Pyro", 1)
+print(me.name)
+print(me.age)

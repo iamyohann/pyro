@@ -21,15 +21,15 @@ def pair<T, U>(first: T, second: U):
     # ...
 ```
 
-## Generic Structs
+## Generic Records
 
-Structs can also be generic.
+Records can also be generic.
 
 ```python
-struct Box<T> {
-    value: T
-}
+record Box<T>(value: T)
 
+let b = Box(10)
+```
 let int_box: Box<int> = { "value": 10 }
 let str_box: Box<string> = { "value": "hello" }
 ```

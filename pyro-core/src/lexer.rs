@@ -11,12 +11,15 @@ pub enum Token {
     If,
     Else,
     While,
-    Struct,
+    For,
+    In,
+    Record,
     Enum,
     Match,
     Case,
     Import,
     Interface,
+    Class,
     Type,
 
     // Identifiers and Literals
@@ -83,6 +86,15 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     tokens.push(Token::Newline);
                     self.handle_indentation(&mut tokens);
+                }
+                '#' => {
+                    // Skip to end of line
+                    while let Some(&c) = self.input.peek() {
+                         if c == '\n' {
+                             break;
+                         }
+                         self.input.next();
+                    }
                 }
                 '+' => { self.input.next(); tokens.push(Token::Plus); }
                 '-' => {
@@ -236,14 +248,19 @@ impl<'a> Lexer<'a> {
             "if" => Token::If,
             "else" => Token::Else,
             "while" => Token::While,
+            "for" => Token::For,
+            "in" => Token::In,
+            "record" => Token::Record,
             "return" => Token::Return,
-            "struct" => Token::Struct,
+
+
             "enum" => Token::Enum,
             "match" => Token::Match,
             "case" => Token::Case,
             "import" => Token::Import,
             "interface" => Token::Interface,
             "type" => Token::Type,
+            "class" => Token::Class,
             _ => Token::Identifier(ident),
         }
     }

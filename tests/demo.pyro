@@ -5,9 +5,6 @@ interface Speaker {
     def name() -> string
 }
 
-struct Dog {
-    id: int
-    name: string
-}
+record Dog(id: int, name: string)
 
 print("Parsing successful!")

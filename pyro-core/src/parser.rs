@@ -38,32 +38,33 @@ impl<'a> Parser<'a> {
             Some(Token::If) => self.parse_if(),
 
             Some(Token::While) => self.parse_while(),
+            Some(Token::For) => self.parse_for(),
             Some(Token::Import) => self.parse_import(),
-            Some(Token::Struct) => self.parse_struct_decl(),
+            Some(Token::Record) => self.parse_record_decl(),
+            Some(Token::Class) => self.parse_class_decl(),
             Some(Token::Interface) => self.parse_interface_decl(),
             Some(Token::Type) => self.parse_type_alias(),
             _ => {
                 let expr = self.parse_expression()?;
                 
                 if let Some(Token::Equal) = self.tokens.peek() {
-                    // Assignment: left side must be identifier
-                    if let Expr::Identifier(name) = expr {
-                        self.tokens.next(); // consume '='
-                        let value = self.parse_expression()?;
-                        if let Some(Token::Newline) = self.tokens.peek() {
-                            self.tokens.next();
-                        }
-                        return Ok(Stmt::Assign { name, value });
-                    } else {
-                        return Err("Invalid assignment target".to_string());
+                    self.tokens.next(); // consume '='
+                    let value = self.parse_expression()?;
+                    if let Some(Token::Newline) = self.tokens.peek() {
+                        self.tokens.next();
                     }
+                    match expr {
+                        Expr::Identifier(name) => Ok(Stmt::Assign { name, value }),
+                        Expr::Get { object, name } => Ok(Stmt::Set { object: *object, name, value }),
+                        _ => Err("Invalid assignment target".to_string()),
+                    }
+                } else {
+                    // Consume optional newline after expression statement
+                    if let Some(Token::Newline) = self.tokens.peek() {
+                       self.tokens.next();
+                    }
+                    Ok(Stmt::Expr(expr))
                 }
-
-                // Consume optional newline after expression statement
-                if let Some(Token::Newline) = self.tokens.peek() {
-                    self.tokens.next();
-                }
-                Ok(Stmt::Expr(expr))
             }
         }
     }
@@ -283,14 +284,29 @@ impl<'a> Parser<'a> {
                     self.tokens.next();
                 } else {
                     loop {
-                        args.push(self.parse_expression()?);
+                        let arg = self.parse_expression()?;
+                        args.push(arg);
+                        // println!("Parsed arg: {:?}, Next token: {:?}", args.last(), self.tokens.peek());
                         match self.tokens.peek() {
-                            Some(Token::Comma) => { self.tokens.next(); }
+                            Some(Token::Comma) => { 
+                                self.tokens.next(); 
+                                if let Some(Token::RParen) = self.tokens.peek() {
+                                    self.tokens.next();
+                                    break;
+                                }
+                            }
                             Some(Token::RParen) => {
                                 self.tokens.next();
                                 break;
                             }
-                            _ => return Err("Expected ',' or ')' in argument list".to_string()),
+                            Some(Token::RParen) => {
+                                self.tokens.next();
+                                break;
+                            }
+                            _ => {
+                                println!("TOKEN FAIL: {:?}", self.tokens.peek());
+                                return Err("Expected ',' or ')' in argument list".to_string());
+                            }
                         }
                     }
                 }
@@ -377,6 +393,25 @@ impl<'a> Parser<'a> {
                     Ok(expr)
                 } else {
                     Err("Expected ')' or ','".to_string())
+                }
+            }
+            Some(Token::Minus) => {
+                self.tokens.next(); // -
+                // Treat as Unary Minus or just parse literal if followed by number?
+                // AST doesn't have UnaryOp yet?
+                // Or just Expr::LiteralInt(-val).
+                match self.tokens.peek() {
+                    Some(Token::Integer(i)) => {
+                        let val = *i;
+                        self.tokens.next();
+                        Ok(Expr::LiteralInt(-val))
+                    }
+                     Some(Token::Float(f)) => {
+                        let val = *f;
+                        self.tokens.next();
+                        Ok(Expr::LiteralFloat(-val))
+                    }
+                    _ => Err("Unary minus only supported for literals currently".to_string()),
                 }
             }
             Some(Token::LBrace) => {
@@ -507,6 +542,33 @@ impl<'a> Parser<'a> {
         Ok(Stmt::If { cond, then_block, else_block })
     }
 
+    fn parse_for(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume for
+        
+        let item_name = match self.tokens.next() {
+            Some(Token::Identifier(s)) => s.clone(),
+            _ => return Err("Expected identifier after 'for'".to_string()),
+        };
+
+        if let Some(Token::In) = self.tokens.next() {} else {
+            return Err("Expected 'in' after loop variable".to_string());
+        }
+
+        let iterable = self.parse_expression()?;
+
+        if let Some(Token::Colon) = self.tokens.peek() {
+            self.tokens.next();
+        } else {
+            return Err("Expected ':' after for loop iterable".to_string());
+        }
+
+        let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
+
+        let body = self.parse_block()?;
+
+        Ok(Stmt::For { item_name, iterable, body })
+    }
+
     fn parse_while(&mut self) -> Result<Stmt, String> {
         self.tokens.next(); // while
         let cond = self.parse_expression()?;
@@ -543,8 +605,18 @@ impl<'a> Parser<'a> {
                     Some(Token::Identifier(s)) => s.clone(),
                     _ => return Err("Expected parameter name".to_string()),
                 };
-                if let Some(Token::Colon) = self.tokens.next() {} else { return Err("Expected ':'".to_string()); }
-                let param_type = self.parse_type()?;
+                let param_type = if param_name == "self" {
+                    if let Some(Token::Colon) = self.tokens.peek() {
+                        self.tokens.next();
+                        self.parse_type()?
+                    } else {
+                        // Implicit Self type
+                        Type::UserDefined("Self".to_string(), Vec::new())
+                    }
+                } else {
+                    if let Some(Token::Colon) = self.tokens.next() {} else { return Err("Expected ':'".to_string()); }
+                    self.parse_type()?
+                };
                 params.push((param_name, param_type));
 
                 match self.tokens.peek() {
@@ -622,56 +694,65 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Import(path))
     }
 
-    fn parse_struct_decl(&mut self) -> Result<Stmt, String> {
-        self.tokens.next(); // consume struct
+
+    fn parse_record_decl(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume record
         let name = match self.tokens.next() {
             Some(Token::Identifier(s)) => s.clone(),
-            _ => return Err("Expected struct name".to_string()),
+            _ => return Err("Expected record name".to_string()),
         };
 
         let generics = self.parse_generic_params()?;
 
-        if let Some(Token::LBrace) = self.tokens.next() {} else {
-            return Err("Expected '{' after struct name".to_string());
+        if let Some(Token::LParen) = self.tokens.next() {} else {
+            return Err("Expected '('".to_string());
         }
 
         let mut fields = Vec::new();
-        while let Some(token) = self.tokens.peek() {
-             if **token == Token::RBrace {
-                 self.tokens.next();
-                 break;
-             }
-             if **token == Token::Newline || **token == Token::Indent || **token == Token::Dedent {
-                 self.tokens.next();
-                 continue;
-             }
-             
-             let field_name = match self.tokens.next() {
-                 Some(Token::Identifier(s)) => s.clone(),
-                 _ => return Err("Expected field name".to_string()),
-             };
-
-             if let Some(Token::Colon) = self.tokens.next() {} else {
-                 return Err("Expected ':' after field name".to_string());
-             }
-
-             let field_type = self.parse_type()?;
-             fields.push((field_name, field_type));
-             
-             // Check for comma or newline or end
-             match self.tokens.peek() {
-                 Some(Token::Comma) => { self.tokens.next(); }
-                 Some(Token::Newline) => { self.tokens.next(); }
-                 Some(Token::RBrace) => {}
-                 _ => return Err("Expected ',' or newline or '}' after field".to_string()),
-             }
-        }
-        
-        if let Some(Token::Newline) = self.tokens.peek() {
+        if let Some(Token::RParen) = self.tokens.peek() {
             self.tokens.next();
+        } else {
+            loop {
+                 let field_name = match self.tokens.next() {
+                     Some(Token::Identifier(s)) => s.clone(),
+                     _ => return Err("Expected field name".to_string()),
+                 };
+
+                 if let Some(Token::Colon) = self.tokens.next() {} else {
+                     return Err("Expected ':'".to_string());
+                 }
+
+                 let field_type = self.parse_type()?;
+                 fields.push((field_name, field_type));
+                 
+                 match self.tokens.peek() {
+                     Some(Token::Comma) => { self.tokens.next(); }
+                     Some(Token::RParen) => {
+                         self.tokens.next();
+                         break;
+                     }
+                     _ => return Err("Expected ',' or ')'".to_string()),
+                 }
+            }
         }
 
-        Ok(Stmt::StructDef { name, generics, fields })
+        let mut methods = Vec::new();
+        if let Some(Token::Colon) = self.tokens.peek() {
+            self.tokens.next(); // consume ':'
+            if let Some(Token::Newline) = self.tokens.peek() {
+                 self.tokens.next();
+            } else {
+                 return Err("Expected newline after ':'".to_string());
+            }
+             methods = self.parse_block()?;
+        } else {
+             // Optional newline if no body
+             if let Some(Token::Newline) = self.tokens.peek() {
+                 self.tokens.next();
+             }
+        }
+
+        Ok(Stmt::RecordDef { name, generics, fields, methods })
     }
 
     fn parse_interface_decl(&mut self) -> Result<Stmt, String> {
@@ -774,5 +855,50 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Stmt::TypeAlias { name, generics, alias })
+    }
+
+    fn parse_class_decl(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume class
+        let name = match self.tokens.next() {
+            Some(Token::Identifier(s)) => s.clone(),
+            _ => return Err("Expected class name".to_string()),
+        };
+
+        if let Some(Token::Colon) = self.tokens.next() {} else {
+             return Err("Expected ':' after class name".to_string());
+        }
+        
+        let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
+
+        if let Some(Token::Indent) = self.tokens.next() {} else {
+             return Err("Expected indentation for class body".to_string());
+        }
+
+        let mut methods = Vec::new();
+        loop {
+             let token = if let Some(t) = self.tokens.peek() {
+                 (*t).clone()
+             } else {
+                 break;
+             };
+
+             if token == Token::Dedent {
+                 self.tokens.next();
+                 break;
+             }
+             if token == Token::EOF { break; }
+             if token == Token::Newline { 
+                 self.tokens.next(); 
+                 continue; 
+             }
+
+             if token == Token::Def {
+                 methods.push(self.parse_fn_decl()?);
+             } else {
+                 return Err(format!("Unexpected token in class body: {:?}. Only methods supported currently.", token));
+             }
+        }
+        
+        Ok(Stmt::ClassDecl { name, methods })
     }
 }

@@ -1,0 +1,23 @@
+record Calculator(factor: int):
+    def add(self, a: int, b: int) -> int:
+        return (self.factor + a + b)
+
+    def add3(self, x: int, y: int, z: int) -> int:
+        return self.factor + x + y + z
+
+let c = Calculator(10)
+
+print("Test 1: Direct Currying")
+print(c.add(5)(5)) 
+
+print("Test 2: Partial Application Variable")
+let add5 = c.add(5)
+print(add5(5)) 
+print(add5(10))
+
+print("Test 3: Method Reference")
+let method_ref = c.add
+print(method_ref(5)(5))
+
+print("Test 4: Over-application Chain")
+print(c.add3(1)(2)(3))

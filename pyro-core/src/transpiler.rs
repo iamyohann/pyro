@@ -97,6 +97,17 @@ impl Transpiler {
                 self.push_indent(indent);
                 self.output.push_str("}\n");
             }
+            Stmt::RecordDef { name, generics: _, fields, methods: _ } => {
+                // Rust struct (tuple struct?)
+                // record Point(x: int, y: int) -> struct Point { x: i64, y: i64 }
+                // or tuple struct Point(i64, i64);
+                // Let's do named fields for clarity
+                self.output.push_str(&format!("struct {} {{\n", name));
+                for (f_name, f_type) in fields {
+                     self.output.push_str(&format!("    pub {}: {},\n", f_name, self.map_type(&f_type)));
+                }
+                self.output.push_str("}\n");
+            }
             Stmt::Return(expr_opt) => {
                 self.output.push_str("return");
                 if let Some(expr) = expr_opt {
@@ -108,8 +119,23 @@ impl Transpiler {
             Stmt::Import(_) => {
                  self.output.push_str("// import resolved \n");
             }
-            Stmt::StructDef { .. } | Stmt::InterfaceDef { .. } | Stmt::TypeAlias { .. } => {
+            Stmt::For { item_name, iterable, body } => {
+                self.push_indent(indent);
+                self.output.push_str(&format!("for {} in ", item_name));
+                self.transpile_expr(iterable);
+                self.output.push_str(" {\n");
+                for s in body {
+                    self.transpile_stmt(s, indent + 1);
+                }
+                self.push_indent(indent);
+                self.output.push_str("}\n");
+            }
+            Stmt::InterfaceDef { .. } | Stmt::TypeAlias { .. } => {
                  self.output.push_str("// type defs not yet supported in transpiler \n");
+            }
+            Stmt::Set { .. } | Stmt::ClassDecl { .. } => {
+                // TODO: Class support
+                self.output.push_str("// class/set not supported in transpiler yet \n");
             }
         }
     }

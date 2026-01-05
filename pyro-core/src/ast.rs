@@ -75,7 +75,17 @@ pub enum Stmt {
         cond: Expr,
         body: Vec<Stmt>,
     },
+    For {
+        item_name: String,
+        iterable: Expr,
+        body: Vec<Stmt>,
+    },
     Assign {
+        name: String,
+        value: Expr,
+    },
+    Set {
+        object: Expr,
         name: String,
         value: Expr,
     },
@@ -88,10 +98,11 @@ pub enum Stmt {
     },
     Return(Option<Expr>),
     Import(String),
-    StructDef {
+    RecordDef {
         name: String,
         generics: Vec<String>,
         fields: Vec<(String, Type)>,
+        methods: Vec<Stmt>,
     },
     InterfaceDef {
         name: String,
@@ -102,6 +113,10 @@ pub enum Stmt {
         name: String,
         generics: Vec<String>,
         alias: Type,
+    },
+    ClassDecl {
+        name: String,
+        methods: Vec<Stmt>,
     },
 }
 

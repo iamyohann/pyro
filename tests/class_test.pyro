@@ -1,0 +1,25 @@
+class Greeter:
+    def __init__(self: Greeter, name: string):
+        self.name = name
+
+    def greet(self: Greeter):
+        print("Hello " + self.name)
+    
+    def set_name(self: Greeter, n: string):
+        self.name = n
+
+print("Testing Class Instantiation:")
+let g = Greeter("Pyro")
+g.greet()
+
+print("Testing Method call changing state:")
+g.set_name("World")
+g.greet()
+
+print("Testing Property Access:")
+print(g.name)
+
+print("Testing Multiple Instances:")
+let g2 = Greeter("Uniqueness")
+g2.greet()
+g.greet() # Should still be World
