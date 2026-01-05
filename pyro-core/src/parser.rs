@@ -630,8 +630,12 @@ impl<'a> Parser<'a> {
                         Type::UserDefined("Self".to_string(), Vec::new())
                     }
                 } else {
-                    if let Some(Token::Colon) = self.tokens.next() {} else { return Err("Expected ':'".to_string()); }
-                    self.parse_type()?
+                    if let Some(Token::Colon) = self.tokens.peek() {
+                        self.tokens.next();
+                        self.parse_type()?
+                    } else {
+                         Type::UserDefined("Any".to_string(), Vec::new())
+                    }
                 };
                 params.push((param_name, param_type));
 
@@ -880,10 +884,23 @@ impl<'a> Parser<'a> {
             _ => return Err("Expected class name".to_string()),
         };
 
-        if let Some(Token::Colon) = self.tokens.next() {} else {
-             return Err("Expected ':' after class name".to_string());
+        let mut parent = None;
+        if let Some(Token::LParen) = self.tokens.peek() {
+             self.tokens.next(); // consume (
+             match self.tokens.next() {
+                 Some(Token::Identifier(s)) => parent = Some(s.clone()),
+                 _ => return Err("Expected parent class name".to_string()),
+             }
+             if let Some(Token::RParen) = self.tokens.next() {} else {
+                 return Err("Expected ')' after parent class name".to_string());
+             }
         }
-        
+
+        if let Some(Token::Colon) = self.tokens.next() {} else {
+             println!("Debug: Failed to find colon. Next token: {:?}", self.tokens.peek());
+             return Err("Expected ':' after class declaration".to_string());
+        }
+
         let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
 
         if let Some(Token::Indent) = self.tokens.next() {} else {
@@ -915,7 +932,7 @@ impl<'a> Parser<'a> {
              }
         }
         
-        Ok(Stmt::ClassDecl { name, methods })
+        Ok(Stmt::ClassDecl { name, parent, methods })
     }
     fn parse_try(&mut self) -> Result<Stmt, String> {
         self.tokens.next(); // consume try
@@ -979,12 +996,18 @@ impl<'a> Parser<'a> {
 
     fn parse_raise(&mut self) -> Result<Stmt, String> {
         self.tokens.next(); // consume raise
-        let expr = self.parse_expression()?;
+        let error = self.parse_expression()?;
+        let mut cause = None;
+
+        if let Some(Token::From) = self.tokens.peek() {
+            self.tokens.next();
+            cause = Some(self.parse_expression()?);
+        }
         
         if let Some(Token::Newline) = self.tokens.peek() {
             self.tokens.next();
         }
         
-        Ok(Stmt::Raise(expr))
+        Ok(Stmt::Raise { error, cause })
     }
 }

@@ -12,13 +12,13 @@ Tracking feature parity with Python and new additions.
     - [x] `__init__` constructor.
     - [x] `self` reference.
     - [x] Method definitions within classes.
-    - [ ] Inheritance (`class Child(Parent):`).
+    - [x] Inheritance (`class Child(Parent):`).
 - [x] **Objects**: Instantiation of classes `obj = MyClass()`.
 
 ## 3. Error Handling
 - [x] **Try...Except**: Implement `try`, `except`, `finally` blocks for error handling.
 - [x] **Raise**: Ability to raise exceptions.
-- [] **Custom errors**: Ability to create custom errors by implementing an Error interface. Ability to chain errors and preserve error context and chain.
+- [x] **Custom errors**: Ability to create custom errors by implementing an Error interface. Ability to chain errors and preserve error context and chain.
 
 ## 4. Built-in Functions
 - [ ] **Global Functions**: Implement global versions of common methods to match Python style.

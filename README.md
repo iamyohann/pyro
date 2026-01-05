@@ -32,6 +32,7 @@ See [docs/tutorial.md](docs/tutorial.md).
 - [Functional Programming](docs/functional.md)
 - [Package Management](docs/packages.md)
 - [Data Structures](docs/datastructures.md)
+- [Error Handling](docs/error_handling.md)
 
 ## Features
 - **Syntax**: Python-like (indentation-based).

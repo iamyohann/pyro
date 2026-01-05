@@ -118,6 +118,7 @@ pub enum Stmt {
     },
     ClassDecl {
         name: String,
+        parent: Option<String>,
         methods: Vec<Stmt>,
     },
     Try {
@@ -126,7 +127,10 @@ pub enum Stmt {
         catch_body: Option<Vec<Stmt>>,
         finally_body: Option<Vec<Stmt>>,
     },
-    Raise(Expr),
+    Raise {
+        error: Expr,
+        cause: Option<Expr>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

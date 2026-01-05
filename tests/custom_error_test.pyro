@@ -1,0 +1,42 @@
+
+# 1. Test Inheritance and Error class
+class CustomError(Error):
+    def __init__(self, msg, code):
+        self.message = msg
+        self.code = code
+
+mut passed_checks = 0
+
+try:
+    raise CustomError("Something went wrong", 404)
+except e:
+    if e.message == "Something went wrong":
+        passed_checks = passed_checks + 1
+        print("Check 1 Passed: message")
+    
+    if e.code == 404:
+        passed_checks = passed_checks + 1
+        print("Check 2 Passed: code")
+
+# 2. Test Error Chaining (raise ... from ...)
+try:
+    try:
+        raise Error("Original Cause")
+    except cause:
+        raise Error("New Error") from cause
+except e:
+    if e.message == "New Error":
+        passed_checks = passed_checks + 1
+        print("Check 3 Passed: new message")
+    
+    # Check cause
+    # cause is stored as "cause" field in the error instance
+    # note: Interpreter implementation used "cause" string key
+    if e.cause.message == "Original Cause":
+        passed_checks = passed_checks + 1
+        print("Check 4 Passed: cause message")
+
+if passed_checks == 4:
+    print("All Custom Error Tests Passed")
+else:
+    print("Some tests failed")

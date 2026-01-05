@@ -139,7 +139,7 @@ impl Transpiler {
             }
             Stmt::Break => self.output.push_str("break;\n"),
             Stmt::Continue => self.output.push_str("continue;\n"),
-            Stmt::Try { .. } | Stmt::Raise(_) => todo!("Transpilation for Try/Raise not implemented"),
+            Stmt::Try { .. } | Stmt::Raise { .. } => todo!("Transpilation for Try/Raise not implemented"),
             Stmt::Import(_) => {} // imports handled separately or ignored for now in simple transpiler
         }
     }

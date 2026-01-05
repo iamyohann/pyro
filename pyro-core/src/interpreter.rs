@@ -23,6 +23,7 @@ pub enum Value {
     
     Class {
         name: String,
+        parent: Option<String>,
         methods: Rc<HashMap<String, Value>>, // methods are Function values
     },
     Instance {
@@ -78,8 +79,38 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
+        let mut globals = HashMap::new();
+
+        // Define built-in Error class
+        // class Error:
+        //     def __init__(self, message):
+        //         self.message = message
+        let init_body = vec![
+            Stmt::Set {
+                object: Expr::Identifier("self".to_string()),
+                name: "message".to_string(),
+                value: Expr::Identifier("message".to_string()),
+            }
+        ];
+
+        let init_func = Value::Function {
+            generics: Vec::new(),
+            params: vec![("self".to_string(), Type::Void), ("message".to_string(), Type::String)],
+            body: Rc::new(init_body),
+            partial_args: Vec::new(),
+        };
+
+        let mut error_methods = HashMap::new();
+        error_methods.insert("__init__".to_string(), init_func);
+
+        globals.insert("Error".to_string(), Value::Class {
+            name: "Error".to_string(),
+            parent: None,
+            methods: Rc::new(error_methods),
+        });
+
         Self {
-            globals: HashMap::new(),
+            globals,
         }
     }
     
@@ -153,8 +184,14 @@ impl Interpreter {
 
                 return flow_result;
             }
-            Stmt::Raise(expr) => {
-                let val = self.evaluate(expr)?;
+            Stmt::Raise { error, cause } => {
+                let val = self.evaluate(error)?;
+                if let Some(cause_expr) = cause {
+                    let cause_val = self.evaluate(cause_expr)?;
+                    if let Value::Instance { fields, .. } = &val {
+                         fields.borrow_mut().insert("cause".to_string(), cause_val);
+                    }
+                }
                 return Err(val);
             }
             Stmt::VarDecl { name, value, .. } => {
@@ -268,14 +305,25 @@ impl Interpreter {
                     }
                 }
             }
-            Stmt::ClassDecl { name, methods } => {
+            Stmt::ClassDecl { name, parent, methods } => {
                 let mut method_map = HashMap::new();
+                
+                if let Some(parent_name) = &parent {
+                     if let Some(Value::Class { methods: parent_methods, .. }) = self.globals.get(parent_name) {
+                         for (k, v) in parent_methods.iter() {
+                             method_map.insert(k.clone(), v.clone());
+                         }
+                     } else {
+                         return Err(self.make_error(&format!("Parent class '{}' not found", parent_name)));
+                     }
+                }
+
                 for method in methods {
                     if let Stmt::FnDecl { name, generics, params, body, .. } = method {
                         method_map.insert(name.clone(), Value::Function { generics, params, body: Rc::new(body), partial_args: Vec::new() });
                     }
                 }
-                self.globals.insert(name.clone(), Value::Class { name, methods: Rc::new(method_map) });
+                self.globals.insert(name.clone(), Value::Class { name, parent, methods: Rc::new(method_map) });
             }
         }
         Ok(Flow::None)
@@ -877,7 +925,7 @@ impl Interpreter {
                      self.apply(result, remaining.to_vec())
                 }
             }
-            Value::Class { name, methods } => {
+            Value::Class { name, methods, .. } => {
                  let instance = Value::Instance {
                      class_name: name.clone(),
                      fields: Rc::new(RefCell::new(HashMap::new())),

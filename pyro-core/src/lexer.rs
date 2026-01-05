@@ -27,6 +27,7 @@ pub enum Token {
     Except,
     Finally,
     Raise,
+    From,
 
     // Identifiers and Literals
     Identifier(String),
@@ -273,6 +274,7 @@ impl<'a> Lexer<'a> {
             "except" => Token::Except,
             "finally" => Token::Finally,
             "raise" => Token::Raise,
+            "from" => Token::From,
             _ => Token::Identifier(ident),
         }
     }
