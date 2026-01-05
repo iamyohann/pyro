@@ -43,13 +43,13 @@ class Error:
 You can define your own error types by inheriting from the `Error` class.
 
 ```python
-class meaningfulError(Error):
+class MeaningfulError(Error):
     def __init__(self, msg, code):
         self.message = msg
         self.code = code
 
 try:
-    raise meaningfulError("Resource not found", 404)
+    raise MeaningfulError("Resource not found", 404)
 except e:
     print(e.code) # Prints 404
 ```

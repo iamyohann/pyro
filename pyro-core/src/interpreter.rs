@@ -115,7 +115,21 @@ impl Interpreter {
     }
     
     fn make_error(&self, msg: &str) -> Value {
-        Value::String(Rc::new(msg.to_string()))
+        // Construct an instance of Error
+        let mut fields = HashMap::new();
+        fields.insert("message".to_string(), Value::String(Rc::new(msg.to_string())));
+        
+        let methods = if let Some(Value::Class { methods, .. }) = self.globals.get("Error") {
+            methods.clone()
+        } else {
+             Rc::new(HashMap::new())
+        };
+
+        Value::Instance {
+            class_name: "Error".to_string(),
+            fields: Rc::new(RefCell::new(fields)),
+            methods,
+        }
     }
 
 
@@ -429,7 +443,12 @@ impl Interpreter {
                     (Value::Int(a), BinaryOp::Add, Value::Int(b)) => Ok(Value::Int(a + b)),
                     (Value::Int(a), BinaryOp::Sub, Value::Int(b)) => Ok(Value::Int(a - b)),
                     (Value::Int(a), BinaryOp::Mul, Value::Int(b)) => Ok(Value::Int(a * b)),
-                    (Value::Int(a), BinaryOp::Div, Value::Int(b)) => Ok(Value::Int(a / b)),
+                    (Value::Int(a), BinaryOp::Div, Value::Int(b)) => {
+                        if b == 0 {
+                            return Err(self.make_error("Division by zero"));
+                        }
+                        Ok(Value::Int(a / b))
+                    },
                     (Value::Int(a), BinaryOp::Gt, Value::Int(b)) => Ok(Value::Bool(a > b)),
                     (Value::Int(a), BinaryOp::Lt, Value::Int(b)) => Ok(Value::Bool(a < b)),
                     (Value::Int(a), BinaryOp::Eq, Value::Int(b)) => Ok(Value::Bool(a == b)),

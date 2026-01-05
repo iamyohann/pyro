@@ -1,0 +1,7 @@
+
+try:
+    print("Attempting division by zero")
+    let x = 10 / 0
+    print("Should not reach here")
+except e:
+    print("Caught error: " + e.message)
