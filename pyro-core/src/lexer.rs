@@ -12,6 +12,8 @@ pub enum Token {
     Else,
     While,
     For,
+    Break,
+    Continue,
     In,
     Record,
     Enum,
@@ -21,6 +23,10 @@ pub enum Token {
     Interface,
     Class,
     Type,
+    Try,
+    Except,
+    Finally,
+    Raise,
 
     // Identifiers and Literals
     Identifier(String),
@@ -249,6 +255,8 @@ impl<'a> Lexer<'a> {
             "else" => Token::Else,
             "while" => Token::While,
             "for" => Token::For,
+            "break" => Token::Break,
+            "continue" => Token::Continue,
             "in" => Token::In,
             "record" => Token::Record,
             "return" => Token::Return,
@@ -261,6 +269,10 @@ impl<'a> Lexer<'a> {
             "interface" => Token::Interface,
             "type" => Token::Type,
             "class" => Token::Class,
+            "try" => Token::Try,
+            "except" => Token::Except,
+            "finally" => Token::Finally,
+            "raise" => Token::Raise,
             _ => Token::Identifier(ident),
         }
     }

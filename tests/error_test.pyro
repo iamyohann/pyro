@@ -1,0 +1,58 @@
+
+# 1. Basic Try-Except
+try:
+    raise "Ouch"
+except e:
+    if e != "Ouch":
+        print("Test 1 Failed: Expected 'Ouch', got " + e)
+    else:
+        print("Test 1 Passed")
+
+# 2. Try-Finally (no error)
+mut side_effect = 0
+try:
+    side_effect = 1
+finally:
+    side_effect = 2
+
+if side_effect != 2:
+    print("Test 2 Failed: Finally block didn't run")
+else:
+    print("Test 2 Passed")
+
+# 3. Try-Finally (with error, caught outside)
+side_effect = 0
+try:
+    try:
+        raise "Error"
+    finally:
+        side_effect = 1
+except:
+    0
+
+if side_effect != 1:
+    print("Test 3 Failed: Finally block didn't run on error")
+else:
+    print("Test 3 Passed")
+
+# 4. Nested Try-Except
+try:
+    try:
+        raise "Inner"
+    except e:
+        if e != "Inner":
+            print("Test 4 Failed: Inner catch wrong")
+        else:
+            print("Test 4 Passed (Inner)")
+except:
+    print("Test 4 Failed: Should have been caught inner")
+
+# 5. Catching specific error (manual check inside except)
+try:
+    raise "Specific"
+except e:
+    if e == "Specific":
+        print("Test 5 Passed")
+    else:
+        print("Test 5 Failed")
+

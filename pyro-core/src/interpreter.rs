@@ -62,6 +62,14 @@ pub enum Value {
     Void,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Flow {
+    Return(Value),
+    Break,
+    Continue,
+    None,
+}
+
 pub struct Interpreter {
     // Nested scopes: push hashmap on entry, pop on exit
     // optimizing to single scope for now for simplicity
@@ -74,18 +82,81 @@ impl Interpreter {
             globals: HashMap::new(),
         }
     }
-
-    pub fn run(&mut self, statements: Vec<Stmt>) -> Result<Option<Value>, String> {
-        for stmt in statements {
-            if let Some(v) = self.execute_stmt(stmt)? {
-                return Ok(Some(v));
-            }
-        }
-        Ok(None)
+    
+    fn make_error(&self, msg: &str) -> Value {
+        Value::String(Rc::new(msg.to_string()))
     }
 
-    fn execute_stmt(&mut self, stmt: Stmt) -> Result<Option<Value>, String> {
+
+    pub fn run(&mut self, statements: Vec<Stmt>) -> Result<Flow, Value> {
+        for stmt in statements {
+            let flow = self.execute_stmt(stmt)?;
+            match flow {
+                Flow::None => continue,
+                _ => return Ok(flow),
+            }
+        }
+        Ok(Flow::None)
+    }
+
+    fn execute_stmt(&mut self, stmt: Stmt) -> Result<Flow, Value> {
         match stmt {
+            Stmt::Try { body, catch_var, catch_body, finally_body } => {
+                let result = self.run(body);
+                
+                let mut flow_result = Ok(Flow::None); // default
+
+                if let Err(e) = result {
+                    // Exception occurred
+                    if let Some(catch_block) = catch_body {
+                         // Enter implicit scope (simplified for now)
+                         let mut old_globals = self.globals.clone(); // inefficient but works for now as scope push
+                         
+                         if let Some(var_name) = catch_var {
+                             self.globals.insert(var_name, e);
+                         }
+
+                         let catch_res = self.run(catch_block);
+                         
+                         // Restore scope
+                         self.globals = old_globals;
+
+                         if let Err(new_e) = catch_res {
+                             flow_result = Err(new_e);
+                         } else {
+                             flow_result = catch_res;
+                         }
+
+                    } else {
+                        // No catch block, propagate error (delayed until finally runs)
+                        flow_result = Err(e);
+                    }
+                } else {
+                    flow_result = result;
+                }
+
+                // Finally block
+                if let Some(finally_block) = finally_body {
+                     // Run finally, if it errors/returns/breaks it overrides previous result
+                     let fin_res = self.run(finally_block);
+                     match fin_res {
+                         Ok(Flow::None) => {
+                             // Finally finished normally, return previous result
+                             return flow_result;
+                         }
+                         _ => {
+                             // Finally returned/broke/raised, override previous result
+                             return fin_res;
+                         }
+                     }
+                }
+
+                return flow_result;
+            }
+            Stmt::Raise(expr) => {
+                let val = self.evaluate(expr)?;
+                return Err(val);
+            }
             Stmt::VarDecl { name, value, .. } => {
                 let val = self.evaluate(value)?;
                 self.globals.insert(name, val);
@@ -99,37 +170,40 @@ impl Interpreter {
                 } else {
                     Value::Void
                 };
-                return Ok(Some(val));
+                return Ok(Flow::Return(val));
             }
+            Stmt::Break => return Ok(Flow::Break),
+            Stmt::Continue => return Ok(Flow::Continue),
             Stmt::If { cond, then_block, else_block } => {
                 let cond_val = self.evaluate(cond)?;
                 let truthy = match cond_val {
                     Value::Bool(b) => b,
-                    _ => return Err("Condition must be boolean".to_string()),
+                    _ => return Err(self.make_error("Condition must be boolean")),
                 };
 
                 if truthy {
-                    if let Some(v) = self.run(then_block)? {
-                        return Ok(Some(v));
-                    }
+                    let flow = self.run(then_block)?;
+                    if flow != Flow::None { return Ok(flow); }
                 } else if let Some(else_stmts) = else_block {
-                    if let Some(v) = self.run(else_stmts)? {
-                        return Ok(Some(v));
-                    }
+                    let flow = self.run(else_stmts)?;
+                    if flow != Flow::None { return Ok(flow); }
                 }
             }
             Stmt::While { cond, body } => {
                 while let Value::Bool(true) = self.evaluate(cond.clone())? {
-                    if let Some(v) = self.run(body.clone())? {
-                        return Ok(Some(v));
+                    let flow = self.run(body.clone())?;
+                    match flow {
+                        Flow::Return(v) => return Ok(Flow::Return(v)),
+                        Flow::Break => break,
+                        Flow::Continue => continue,
+                        Flow::None => {},
                     }
                 }
             }
             Stmt::Assign { name, value } => {
                 if !self.globals.contains_key(&name) {
-                    return Err(format!("Undefined variable '{}' in assignment", name));
+                    return Err(self.make_error(&format!("Undefined variable '{}' in assignment", name)));
                 }
-                // TODO: Check mutability
                 let val = self.evaluate(value)?;
                 self.globals.insert(name, val);
             }
@@ -141,7 +215,7 @@ impl Interpreter {
                     Value::Instance { fields, .. } => {
                         fields.borrow_mut().insert(name, val);
                     }
-                    _ => return Err("Only instances have fields".to_string()),
+                    _ => return Err(self.make_error("Only instances have fields")),
                 }
             }
             Stmt::FnDecl { name, generics, params, body, .. } => {
@@ -149,7 +223,6 @@ impl Interpreter {
             }
             Stmt::Import(path) => {
                 println!("Importing module: {}", path);
-                // Implementation will come with module resolution
             }
             Stmt::RecordDef { name, generics: _, fields, methods } => {
                 let mut field_names = Vec::new();
@@ -172,7 +245,7 @@ impl Interpreter {
                 });
             }
             Stmt::InterfaceDef { .. } | Stmt::TypeAlias { .. } => {
-                // Not yet supported in interpreter
+                // Not yet supported
             }
             Stmt::For { item_name, iterable, body } => {
                 let iterable_val = self.evaluate(iterable)?;
@@ -181,14 +254,17 @@ impl Interpreter {
                     Value::ListMutable(items) => items.borrow().clone().into(),
                     Value::Tuple(items) => items,
                     Value::Set(items) => items,
-                    _ => return Err("For loop expects iterable".to_string()),
+                    _ => return Err(self.make_error("For loop expects iterable")),
                 };
 
                 for item in items.iter() {
                     self.globals.insert(item_name.clone(), item.clone());
-                    if let Some(v) = self.run(body.clone())? {
-                         // Check for return
-                         return Ok(Some(v));
+                    let flow = self.run(body.clone())?;
+                    match flow {
+                        Flow::Return(v) => return Ok(Flow::Return(v)),
+                        Flow::Break => break,
+                        Flow::Continue => continue,
+                        Flow::None => {},
                     }
                 }
             }
@@ -202,10 +278,10 @@ impl Interpreter {
                 self.globals.insert(name.clone(), Value::Class { name, methods: Rc::new(method_map) });
             }
         }
-        Ok(None)
+        Ok(Flow::None)
     }
 
-    pub fn evaluate(&mut self, expr: Expr) -> Result<Value, String> {
+    pub fn evaluate(&mut self, expr: Expr) -> Result<Value, Value> {
         match expr {
             Expr::LiteralInt(i) => Ok(Value::Int(i)),
             Expr::LiteralFloat(f) => Ok(Value::Float(f)),
@@ -252,7 +328,7 @@ impl Interpreter {
                    return Ok(Value::String(Rc::new(name))); 
                 }
                 
-                self.globals.get(&name).cloned().ok_or_else(|| format!("Undefined variable: {}", name))
+                self.globals.get(&name).cloned().ok_or_else(|| self.make_error(&format!("Undefined variable: {}", name)))
             }
             Expr::Get { object, name } => {
                 let obj_val = self.evaluate(*object)?;
@@ -286,7 +362,7 @@ impl Interpreter {
                                     method: Box::new(func.clone()),
                              });
                         }
-                        return Err(format!("Field or method '{}' not found on Record", name));
+                        return Err(self.make_error(&format!("Field or method '{}' not found on Record", name)));
                     }
                     _ => {}
                 }
@@ -308,9 +384,13 @@ impl Interpreter {
                     (Value::Int(a), BinaryOp::Div, Value::Int(b)) => Ok(Value::Int(a / b)),
                     (Value::Int(a), BinaryOp::Gt, Value::Int(b)) => Ok(Value::Bool(a > b)),
                     (Value::Int(a), BinaryOp::Lt, Value::Int(b)) => Ok(Value::Bool(a < b)),
+                    (Value::Int(a), BinaryOp::Eq, Value::Int(b)) => Ok(Value::Bool(a == b)),
+                    (Value::Int(a), BinaryOp::Neq, Value::Int(b)) => Ok(Value::Bool(a != b)),
                     (Value::String(a), BinaryOp::Add, Value::String(b)) => Ok(Value::String(Rc::new(format!("{}{}", a, b)))),
+                    (Value::String(a), BinaryOp::Eq, Value::String(b)) => Ok(Value::Bool(a == b)),
+                    (Value::String(a), BinaryOp::Neq, Value::String(b)) => Ok(Value::Bool(a != b)),
                     // Add more ops
-                    _ => Err("Unsupported operation".to_string()),
+                    _ => Err(self.make_error("Unsupported operation")),
                 }
             }
             Expr::Call { function, args } => {
@@ -503,8 +583,16 @@ impl Interpreter {
                             self.globals.insert(param_name.clone(), arg_val);
                         }
                         // Clone Rc pointer
-                        let result = self.run((*body).clone())?;
-                        Ok(result.unwrap_or(Value::Void))
+                        let result = self.run((*body).clone());
+                        // self.globals = old_globals; // if we didn't clone globals
+                        
+                        match result {
+                            Ok(Flow::Return(v)) => Ok(v),
+                            Ok(Flow::None) => Ok(Value::Void),
+                            Ok(Flow::Break) => Err("Unexpected 'break' outside of loop".to_string()),
+                            Ok(Flow::Continue) => Err("Unexpected 'continue' outside of loop".to_string()),
+                            Err(e) => Err(e),
+                        }
                     }
                     Value::BuiltinMethod { object, name } => {
                         let mut evaluated_args = Vec::new();
@@ -520,18 +608,18 @@ impl Interpreter {
         }
     }
 
-    fn call_method(&mut self, object: Value, name: &str, args: Vec<Value>) -> Result<Value, String> {
+    fn call_method(&mut self, object: Value, name: &str, args: Vec<Value>) -> Result<Value, Value> {
         match object {
             Value::ListMutable(list_rc) => {
                 let mut list = list_rc.borrow_mut();
                 match name {
                     "push" => {
-                        if args.len() != 1 { return Err("push expects 1 argument".to_string()); }
+                        if args.len() != 1 { return Err(self.make_error("push expects 1 argument")); }
                         list.push(args[0].clone());
                         Ok(Value::Void)
                     }
                     "pop" => {
-                        if !args.is_empty() { return Err("pop expects 0 arguments".to_string()); }
+                        if !args.is_empty() { return Err(self.make_error("pop expects 0 arguments")); }
                         Ok(list.pop().unwrap_or(Value::Void))
                     }
                     "len" => Ok(Value::Int(list.len() as i64)),
@@ -540,19 +628,19 @@ impl Interpreter {
                         Ok(Value::Void)
                     }
                     "insert" => {
-                        if args.len() != 2 { return Err("insert expects 2 arguments: index, value".to_string()); }
+                        if args.len() != 2 { return Err(self.make_error("insert expects 2 arguments: index, value")); }
                         match args[0] {
                             Value::Int(idx) => {
                                 let idx = idx as usize;
-                                if idx > list.len() { return Err("Index out of bounds".to_string()); }
+                                if idx > list.len() { return Err(self.make_error("Index out of bounds")); }
                                 list.insert(idx, args[1].clone());
                                 Ok(Value::Void)
                             }
-                            _ => Err("insert index must be an integer".to_string()),
+                            _ => Err(self.make_error("insert index must be an integer")),
                         }
                     }
                     "remove" => {
-                        if args.len() != 1 { return Err("remove expects 1 argument".to_string()); }
+                        if args.len() != 1 { return Err(self.make_error("remove expects 1 argument")); }
                          if let Some(pos) = list.iter().position(|x| *x == args[0]) {
                              list.remove(pos);
                          }
@@ -562,16 +650,16 @@ impl Interpreter {
                         list.reverse();
                         Ok(Value::Void)
                     }
-                    _ => Err(format!("Method '{}' not found on ListMutable", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on ListMutable", name))),
                 }
             }
             Value::List(list_rc) => {
                 match name {
                     "len" => Ok(Value::Int(list_rc.len() as i64)),
                      "push" | "pop" | "clear" | "insert" | "remove" | "reverse" => {
-                        Err(format!("Cannot call '{}' on immutable List. Use ListMutable if modifications are needed.", name))
+                        Err(self.make_error(&format!("Cannot call '{}' on immutable List. Use ListMutable if modifications are needed.", name)))
                     }
-                    _ => Err(format!("Method '{}' not found on List", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on List", name))),
                 }
             }
             Value::DictMutable(dict_rc) => {
@@ -597,7 +685,7 @@ impl Interpreter {
                         Ok(Value::Void)
                     }
                     "remove" => {
-                        if args.len() != 1 { return Err("remove expects 1 argument (key)".to_string()); }
+                        if args.len() != 1 { return Err(self.make_error("remove expects 1 argument (key)")); }
                         let key = &args[0];
                          if let Some(pos) = dict.iter().position(|(k, _)| k == key) {
                              dict.remove(pos);
@@ -605,7 +693,7 @@ impl Interpreter {
                          Ok(Value::Void)
                     }
                     "get" => {
-                        if args.len() != 1 { return Err("get expects 1 argument (key)".to_string()); }
+                        if args.len() != 1 { return Err(self.make_error("get expects 1 argument (key)")); }
                         let key = &args[0];
                         for (k, v) in dict.iter() {
                             if k == key {
@@ -614,7 +702,7 @@ impl Interpreter {
                         }
                         Ok(Value::Void)
                     }
-                    _ => Err(format!("Method '{}' not found on DictMutable", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on DictMutable", name))),
                 }
             }
              Value::Dict(dict_rc) => {
@@ -635,7 +723,7 @@ impl Interpreter {
                     }
                     "len" => Ok(Value::Int(dict_rc.len() as i64)),
                     "get" => {
-                         if args.len() != 1 { return Err("get expects 1 argument (key)".to_string()); }
+                         if args.len() != 1 { return Err(self.make_error("get expects 1 argument (key)")); }
                         let key = &args[0];
                         for (k, v) in dict_rc.iter() {
                             if k == key {
@@ -644,42 +732,42 @@ impl Interpreter {
                         }
                         Ok(Value::Void)
                     }
-                    _ => Err(format!("Method '{}' not found on Dict", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on Dict", name))),
                 }
             }
             Value::SetMutable(set_rc) => {
                 let mut set = set_rc.borrow_mut();
                 match name {
                     "add" => {
-                         if args.len() != 1 { return Err("add expects 1 argument".to_string()); }
+                         if args.len() != 1 { return Err(self.make_error("add expects 1 argument")); }
                          if !set.contains(&args[0]) {
                              set.push(args[0].clone());
                          }
                          Ok(Value::Void)
                     }
                     "remove" => {
-                        if args.len() != 1 { return Err("remove expects 1 argument".to_string()); }
+                        if args.len() != 1 { return Err(self.make_error("remove expects 1 argument")); }
                         if let Some(pos) = set.iter().position(|x| *x == args[0]) {
                              set.remove(pos);
                         }
                         Ok(Value::Void)
                     }
                     "contains" => {
-                         if args.len() != 1 { return Err("contains expects 1 argument".to_string()); }
+                         if args.len() != 1 { return Err(self.make_error("contains expects 1 argument")); }
                          Ok(Value::Bool(set.contains(&args[0])))
                     }
                     "len" => Ok(Value::Int(set.len() as i64)),
-                    _ => Err(format!("Method '{}' not found on SetMutable", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on SetMutable", name))),
                 }
             }
             Value::Set(set_rc) => {
                 match name {
                     "contains" => {
-                         if args.len() != 1 { return Err("contains expects 1 argument".to_string()); }
+                         if args.len() != 1 { return Err(self.make_error("contains expects 1 argument")); }
                          Ok(Value::Bool(set_rc.contains(&args[0])))
                     }
                     "len" => Ok(Value::Int(set_rc.len() as i64)),
-                    _ => Err(format!("Method '{}' not found on Set", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on Set", name))),
                 }
             }
             Value::String(s) => {
@@ -688,7 +776,7 @@ impl Interpreter {
                     "upper" => Ok(Value::String(Rc::new(s.to_uppercase()))),
                     "lower" => Ok(Value::String(Rc::new(s.to_lowercase()))),
                     "split" => {
-                         if args.len() != 1 { return Err("split expects 1 argument (delimiter)".to_string()); }
+                         if args.len() != 1 { return Err(self.make_error("split expects 1 argument (delimiter)")); }
                          match &args[0] {
                              Value::String(delim) => {
                                  let parts: Vec<Value> = s.split(delim.as_str())
@@ -696,24 +784,24 @@ impl Interpreter {
                                      .collect();
                                  Ok(Value::List(Rc::new(parts)))
                              }
-                             _ => Err("split expects a string delimiter".to_string()),
+                             _ => Err(self.make_error("split expects a string delimiter")),
                          }
                     }
                     "contains" => {
-                         if args.len() != 1 { return Err("contains expects 1 argument".to_string()); }
+                         if args.len() != 1 { return Err(self.make_error("contains expects 1 argument")); }
                          match &args[0] {
                              Value::String(sub) => Ok(Value::Bool(s.contains(sub.as_str()))),
-                             _ => Err("contains argument must be a string".to_string()),
+                             _ => Err(self.make_error("contains argument must be a string")),
                          }
                     }
-                    _ => Err(format!("Method '{}' not found on String", name)),
+                    _ => Err(self.make_error(&format!("Method '{}' not found on String", name))),
                 }
             }
-             _ => Err(format!("Type does not support method '{}'", name)),
+             _ => Err(self.make_error(&format!("Type does not support method '{}'", name))),
         }
     }
     // Helper for applying arguments with currying support
-    fn apply(&mut self, func: Value, args: Vec<Value>) -> Result<Value, String> {
+    fn apply(&mut self, func: Value, args: Vec<Value>) -> Result<Value, Value> {
         match func {
             Value::Function { generics, params, body, partial_args } => {
                 let mut all_args = partial_args.clone();
@@ -740,22 +828,11 @@ impl Interpreter {
                     self.globals = old_globals;
                     
                     match result {
-                        Ok(Some(v)) => Ok(v),
-                        Ok(None) => Ok(Value::Void),
-                        Err(e) => {
-                             if e.starts_with("RETURN_VALUE:") {
-                                 // Return value hack handling if strictly string based
-                                 let val = e.strip_prefix("RETURN_VALUE:").unwrap();
-                                 // We need to parse this string back to value... 
-                                 // But wait, run() returns Option<Value> if Stmt::Return is handled.
-                                 // Stmt::Return(expr) evaluates expr and returns it.
-                                 // So checking `Some(v)` is correct handling for Stmt::Return.
-                                 // The Err("RETURN_VALUE:...") was an old hack?
-                                 // Let's rely on Some(v).
-                                 return Err(e);
-                             }
-                             Err(e)
-                        }
+                        Ok(Flow::Return(v)) => Ok(v),
+                        Ok(Flow::None) => Ok(Value::Void),
+                        Ok(Flow::Break) => Err(self.make_error("Unexpected 'break' outside of loop")),
+                        Ok(Flow::Continue) => Err(self.make_error("Unexpected 'continue' outside of loop")),
+                        Err(e) => Err(e),
                     }
                 } else {
                     // Over-application
@@ -834,7 +911,7 @@ impl Interpreter {
                          return self.apply(*method, call_args);
                      }
                 }
-                Err("BoundMethod expects Function".to_string())
+                Err(self.make_error("BoundMethod expects Function"))
             }
             Value::BuiltinMethod { object, name } => {
                  self.call_method(*object, &name, args)
@@ -847,10 +924,10 @@ impl Interpreter {
                     }
                     Ok(Value::Void)
                  } else if name == "range" {
-                     if args.len() < 1 || args.len() > 3 { return Err("range expects 1 to 3 arguments".to_string()); }
-                        let start = if args.len() == 1 { 0 } else { match args[0] { Value::Int(i) => i, _ => return Err("start int".to_string()) } };
-                        let end = if args.len() == 1 { match args[0] { Value::Int(i) => i, _ => return Err("end int".to_string()) } } else { match args[1] { Value::Int(i) => i, _ => return Err("end int".to_string()) } };
-                        let step = if args.len() == 3 { match args[2] { Value::Int(i) => i, _ => return Err("step int".to_string()) } } else { 1 };
+                     if args.len() < 1 || args.len() > 3 { return Err(self.make_error("range expects 1 to 3 arguments")); }
+                        let start = if args.len() == 1 { 0 } else { match args[0] { Value::Int(i) => i, _ => return Err(self.make_error("start int")) } };
+                        let end = if args.len() == 1 { match args[0] { Value::Int(i) => i, _ => return Err(self.make_error("end int")) } } else { match args[1] { Value::Int(i) => i, _ => return Err(self.make_error("end int")) } };
+                        let step = if args.len() == 3 { match args[2] { Value::Int(i) => i, _ => return Err(self.make_error("step int")) } } else { 1 };
                         
                         let mut vals = Vec::new();
                         let mut current = start;
@@ -858,22 +935,22 @@ impl Interpreter {
                         else { while current > end { vals.push(Value::Int(current)); current += step; } }
                         Ok(Value::List(Rc::new(vals)))
                  } else if name == "ListMutable" {
-                     if args.len() != 1 { return Err("ListMutable takes 1 arg".to_string()); }
-                     match &args[0] { Value::List(l) => Ok(Value::ListMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err("Expects List".to_string()) }
+                     if args.len() != 1 { return Err(self.make_error("ListMutable takes 1 arg")); }
+                     match &args[0] { Value::List(l) => Ok(Value::ListMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects List")) }
                  } else if name == "TupleMutable" {
-                     if args.len() != 1 { return Err("TupleMutable takes 1 arg".to_string()); }
-                     match &args[0] { Value::Tuple(l) => Ok(Value::TupleMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err("Expects Tuple".to_string()) }
+                     if args.len() != 1 { return Err(self.make_error("TupleMutable takes 1 arg")); }
+                     match &args[0] { Value::Tuple(l) => Ok(Value::TupleMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects Tuple")) }
                  } else if name == "SetMutable" {
-                     if args.len() != 1 { return Err("SetMutable takes 1 arg".to_string()); }
-                     match &args[0] { Value::Set(l) => Ok(Value::SetMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err("Expects Set".to_string()) }
+                     if args.len() != 1 { return Err(self.make_error("SetMutable takes 1 arg")); }
+                     match &args[0] { Value::Set(l) => Ok(Value::SetMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects Set")) }
                  } else if name == "DictMutable" {
-                     if args.len() != 1 { return Err("DictMutable takes 1 arg".to_string()); }
-                     match &args[0] { Value::Dict(l) => Ok(Value::DictMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err("Expects Dict".to_string()) }
+                     if args.len() != 1 { return Err(self.make_error("DictMutable takes 1 arg")); }
+                     match &args[0] { Value::Dict(l) => Ok(Value::DictMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects Dict")) }
                  } else {
-                     Err(format!("Unknown builtin function: {}", name))
+                     Err(self.make_error(&format!("Unknown builtin function: {}", name)))
                  }
             }
-            _ => Err(format!("Not callable: {:?}", func)),
+            _ => Err(self.make_error(&format!("Not callable: {:?}", func))),
         }
     }
 }

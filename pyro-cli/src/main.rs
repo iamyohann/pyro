@@ -77,7 +77,10 @@ fn main() -> Result<()> {
 
             // 3. Interpret
             let mut interpreter = Interpreter::new();
-            interpreter.run(statements).map_err(|e| anyhow::anyhow!("Runtime error: {}", e))?;
+            match interpreter.run(statements) {
+                Ok(_) => {}, // Flow::None or internal Flow handling (shouldn't leak usually except Return/None)
+                Err(e) => return Err(anyhow::anyhow!("Runtime error: {:?}", e)),
+            }
         }
         Commands::Mod { command } => {
             match command {

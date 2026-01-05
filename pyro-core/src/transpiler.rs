@@ -137,6 +137,10 @@ impl Transpiler {
                 // TODO: Class support
                 self.output.push_str("// class/set not supported in transpiler yet \n");
             }
+            Stmt::Break => self.output.push_str("break;\n"),
+            Stmt::Continue => self.output.push_str("continue;\n"),
+            Stmt::Try { .. } | Stmt::Raise(_) => todo!("Transpilation for Try/Raise not implemented"),
+            Stmt::Import(_) => {} // imports handled separately or ignored for now in simple transpiler
         }
     }
 

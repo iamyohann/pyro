@@ -5,7 +5,7 @@ Tracking feature parity with Python and new additions.
 ## 1. Control Flow
 - [x] **For Loops**: Implement `for item in iterable:` syntax.
 - [x] **Range Function**: Implement `range(start, stop, step)` for efficient iteration.
-- [ ] **Break/Continue**: Verify support in loops.
+- [x] **Break/Continue**: Verify support in loops.
 
 ## 2. Object Oriented Programming (OOP)
 - [x] **Classes**: Full support for `class` keyword.
@@ -16,8 +16,9 @@ Tracking feature parity with Python and new additions.
 - [x] **Objects**: Instantiation of classes `obj = MyClass()`.
 
 ## 3. Error Handling
-- [ ] **Try...Except**: Implement `try`, `except`, `finally` blocks for error handling.
-- [ ] **Raise**: Ability to raise exceptions.
+- [x] **Try...Except**: Implement `try`, `except`, `finally` blocks for error handling.
+- [x] **Raise**: Ability to raise exceptions.
+- [] **Custom errors**: Ability to create custom errors by implementing an Error interface. Ability to chain errors and preserve error context and chain.
 
 ## 4. Built-in Functions
 - [ ] **Global Functions**: Implement global versions of common methods to match Python style.
@@ -41,5 +42,4 @@ Tracking feature parity with Python and new additions.
 ## 7. Advanced Syntax (Lower Priority)
 - [ ] **Lambdas**: `lambda a, b: a + b`.
 - [ ] **List Comprehensions**: `[x for x in list]`.
-- [ ] **Delete**: `del` keyword.
 - [ ] **Pass**: `pass` keyword.

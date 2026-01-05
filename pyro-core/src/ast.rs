@@ -97,6 +97,8 @@ pub enum Stmt {
         body: Vec<Stmt>,
     },
     Return(Option<Expr>),
+    Break,
+    Continue,
     Import(String),
     RecordDef {
         name: String,
@@ -118,6 +120,13 @@ pub enum Stmt {
         name: String,
         methods: Vec<Stmt>,
     },
+    Try {
+        body: Vec<Stmt>,
+        catch_var: Option<String>,
+        catch_body: Option<Vec<Stmt>>,
+        finally_body: Option<Vec<Stmt>>,
+    },
+    Raise(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]

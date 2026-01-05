@@ -83,7 +83,7 @@ pub fn run() -> Result<()> {
                                          println!("Error importing file: {}", e);
                                     } else {
                                         if let Err(e) = interpreter.run(statements) {
-                                            println!("Runtime Error: {}", e);
+                                            println!("Runtime Error: {:?}", e);
                                         }
                                     }
                                 }
@@ -95,12 +95,12 @@ pub fn run() -> Result<()> {
                                                 _ => println!("{:?}", val),
                                             }
                                         }
-                                        Err(e) => println!("Runtime Error: {}", e),
+                                        Err(e) => println!("Runtime Error: {:?}", e),
                                     }
                                 }
                                 _ => {
                                     if let Err(e) = interpreter.run(vec![stmt]) {
-                                        println!("Runtime Error: {}", e);
+                                        println!("Runtime Error: {:?}", e);
                                     }
                                 }
                             }

@@ -35,6 +35,20 @@ impl<'a> Parser<'a> {
             Some(Token::Mut) => self.parse_var_decl(true),
             Some(Token::Def) => self.parse_fn_decl(),
             Some(Token::Return) => self.parse_return(),
+            Some(Token::Break) => {
+                self.tokens.next();
+                if let Some(Token::Newline) = self.tokens.peek() {
+                    self.tokens.next();
+                }
+                Ok(Stmt::Break)
+            },
+            Some(Token::Continue) => {
+                self.tokens.next();
+                if let Some(Token::Newline) = self.tokens.peek() {
+                    self.tokens.next();
+                }
+                Ok(Stmt::Continue)
+            },
             Some(Token::If) => self.parse_if(),
 
             Some(Token::While) => self.parse_while(),
@@ -44,6 +58,8 @@ impl<'a> Parser<'a> {
             Some(Token::Class) => self.parse_class_decl(),
             Some(Token::Interface) => self.parse_interface_decl(),
             Some(Token::Type) => self.parse_type_alias(),
+            Some(Token::Try) => self.parse_try(),
+            Some(Token::Raise) => self.parse_raise(),
             _ => {
                 let expr = self.parse_expression()?;
                 
@@ -900,5 +916,75 @@ impl<'a> Parser<'a> {
         }
         
         Ok(Stmt::ClassDecl { name, methods })
+    }
+    fn parse_try(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume try
+        
+        if let Some(Token::Colon) = self.tokens.peek() {
+            self.tokens.next();
+        } else {
+            return Err("Expected ':' after try".to_string());
+        }
+
+        let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
+        let body = self.parse_block()?;
+
+        let mut catch_var = None;
+        let mut catch_body = None;
+
+        if let Some(Token::Except) = self.tokens.peek() {
+            self.tokens.next(); // consume except
+            
+            // Check for optional variable: except e:
+            if let Some(Token::Identifier(s)) = self.tokens.peek() {
+                catch_var = Some(s.clone());
+                self.tokens.next();
+            }
+
+            if let Some(Token::Colon) = self.tokens.peek() {
+                self.tokens.next();
+            } else {
+                return Err("Expected ':' after except".to_string());
+            }
+
+            let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
+            catch_body = Some(self.parse_block()?);
+        }
+
+        let mut finally_body = None;
+        if let Some(Token::Finally) = self.tokens.peek() {
+            self.tokens.next(); // consume finally
+            
+            if let Some(Token::Colon) = self.tokens.peek() {
+                self.tokens.next();
+            } else {
+                return Err("Expected ':' after finally".to_string());
+            }
+
+             let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
+            finally_body = Some(self.parse_block()?);
+        }
+
+        if catch_body.is_none() && finally_body.is_none() {
+            return Err("Try block must be followed by except or finally".to_string());
+        }
+
+        Ok(Stmt::Try {
+            body,
+            catch_var,
+            catch_body,
+            finally_body,
+        })
+    }
+
+    fn parse_raise(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume raise
+        let expr = self.parse_expression()?;
+        
+        if let Some(Token::Newline) = self.tokens.peek() {
+            self.tokens.next();
+        }
+        
+        Ok(Stmt::Raise(expr))
     }
 }

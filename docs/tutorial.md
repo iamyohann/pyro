@@ -98,6 +98,16 @@ else:
 
 while x > 0:
     x = x - 1
+
+# Break and Continue
+mut i = 0
+while i < 10:
+    i = i + 1
+    if i == 5:
+        continue # Skip 5
+    if i > 8:
+        break    # Stop loop
+    print(i)
 ```
 
 
