@@ -146,7 +146,6 @@ impl Transpiler {
             Stmt::Continue => self.output.push_str("continue;\n"),
             Stmt::Try { .. } | Stmt::Raise { .. } => todo!("Transpilation for Try/Raise not implemented"),
             Stmt::Import(_) => {} // imports handled separately or ignored for now in simple transpiler
-            Stmt::Send { .. } => todo!("Transpilation for 'send' stmt not yet implemented"),
         }
     }
 
@@ -183,7 +182,7 @@ impl Transpiler {
                 self.transpile_expr(*right);
                 self.output.push_str(")");
             }
-            Expr::Call { function, args } => {
+            Expr::Call { function, generics, args } => {
                 if let Expr::Identifier(name) = *function.clone() {
                     if name == "print" {
                         self.output.push_str("println!(\"{:?}\", ");
@@ -196,9 +195,32 @@ impl Transpiler {
                         self.output.push_str(")");
                         return;
                     }
+
+                    if name == "chan" {
+                        // Special handling for chan
+                        let type_str = if generics.is_empty() {
+                            "Box<dyn std::any::Any>".to_string()
+                        } else {
+                            self.map_type(&generics[0])
+                        };
+                        
+                        self.output.push_str(&format!("async_channel::bounded::<{}>", type_str));
+                        self.output.push_str("(");
+                        // Default capacity 1 if no arg?
+                        if args.is_empty() {
+                            self.output.push_str("1");
+                        } else {
+                            self.transpile_expr(args[0].clone());
+                        }
+                        self.output.push_str(")");
+                        return;
+                    }
                 }
                 
                 self.transpile_expr(*function);
+                // TODO: emit generics in call? e.g. ::<args>
+                // If it's a function call in Rust, we might need ::<T>
+                // But simple transpiler might ignore for now unless it's chan
                 self.output.push_str("(");
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 { self.output.push_str(", "); }
@@ -249,7 +271,6 @@ impl Transpiler {
                  }
                  self.output.push_str("])");
             }
-            Expr::Receive(_) => todo!("Transpilation for 'receive' expr not yet implemented"),
         }
     }
 

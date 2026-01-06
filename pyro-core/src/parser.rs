@@ -75,14 +75,6 @@ impl<'a> Parser<'a> {
                         Expr::Get { object, name } => Ok(Stmt::Set { object: *object, name, value }),
                         _ => Err("Invalid assignment target".to_string()),
                     }
-                } else if let Some(Token::ArrowLeft) = self.tokens.peek() {
-                    self.tokens.next(); // consume <-
-                    let value = self.parse_expression()?; // Send is expr <- expr (statement)
-                    // The 'expr' we parsed is the channel. 'value' is what we send.
-                    if let Some(Token::Newline) = self.tokens.peek() {
-                        self.tokens.next();
-                    }
-                    Ok(Stmt::Send { channel: expr, value })
                 } else {
                     // Consume optional newline after expression statement
                     if let Some(Token::Newline) = self.tokens.peek() {
@@ -299,13 +291,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Expr, String> {
-        if let Some(Token::ArrowLeft) = self.tokens.peek() {
-            self.tokens.next();
-            let right = self.parse_unary()?;
-            Ok(Expr::Receive(Box::new(right)))
-        } else {
-            self.parse_primary()
-        }
+        self.parse_primary()
     }
 
     fn parse_primary(&mut self) -> Result<Expr, String> {
@@ -347,6 +333,7 @@ impl<'a> Parser<'a> {
                 }
                 expr = Expr::Call {
                     function: Box::new(expr),
+                    generics: Vec::new(),
                     args,
                 };
             } else if let Some(Token::Dot) = self.tokens.peek() {
@@ -397,6 +384,60 @@ impl<'a> Parser<'a> {
                 let name = s.clone();
                 self.tokens.next();
                 Ok(Expr::Identifier(name))
+            }
+            Some(Token::Chan) => {
+                self.tokens.next(); // consume chan
+                
+                // Parse optional generics <T>
+                let mut generics = Vec::new();
+                if let Some(Token::Less) = self.tokens.peek() {
+                    self.tokens.next(); // <
+                    loop {
+                        generics.push(self.parse_type()?);
+                        match self.tokens.peek() {
+                            Some(Token::Comma) => { self.tokens.next(); }
+                            Some(Token::Greater) => {
+                                self.tokens.next();
+                                break;
+                            }
+                            _ => return Err("Expected ',' or '>' in generic type args".to_string()),
+                        }
+                    }
+                }
+
+                // Expect (args)
+                if let Some(Token::LParen) = self.tokens.peek() {
+                    self.tokens.next(); // (
+                    let mut args = Vec::new();
+                    if let Some(Token::RParen) = self.tokens.peek() {
+                        self.tokens.next(); 
+                    } else {
+                        loop {
+                            args.push(self.parse_expression()?);
+                             match self.tokens.peek() {
+                                Some(Token::Comma) => { self.tokens.next(); }
+                                Some(Token::RParen) => {
+                                    self.tokens.next();
+                                    break;
+                                }
+                                _ => return Err("Expected ',' or ')' in argument list".to_string()),
+                            }
+                        }
+                    }
+                     Ok(Expr::Call {
+                        function: Box::new(Expr::Identifier("chan".to_string())),
+                        generics,
+                        args,
+                    })
+                } else {
+                     // treating `chan` as identifier if not followed by parens? 
+                     // But we consumed `chan`. 
+                     // If just `let c = chan`, that's an identifier usage (function pointer)?
+                     // We return Identifier("chan") but that might confuse if we wanted generics.
+                     // But `chan<int>` without parens is a type? No, `chan` is function.
+                     // For now assume `chan` is always call or identifier.
+                     Ok(Expr::Identifier("chan".to_string()))
+                }
             }
             Some(Token::LParen) => {
                 self.tokens.next(); // (

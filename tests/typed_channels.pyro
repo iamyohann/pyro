@@ -1,0 +1,40 @@
+
+def worker(c):
+    print("Worker running")
+    c.push(100)
+    print("Worker sent 100")
+
+print("Main starting")
+let c = chan<int>(1)
+
+go worker(c)
+
+print("Main waiting")
+let val = c.collect()
+print("Received: " + str(val))
+
+if val == 100:
+    print("Typed channel test passed")
+else:
+    print("Typed channel test failed")
+
+# Test string channel
+let s = chan<string>(1)
+s.push("hello")
+if s.collect() == "hello":
+    print("String channel passed")
+else:
+    print("String channel failed")
+
+# Test directional channels
+let c2 = chan<int>(1)
+let tx = c2.sender()
+let rx = c2.receiver()
+
+tx.push(200)
+# rx.push(300) # Should fail if we could catch it, but for now just testing happy path
+let val2 = rx.collect()
+if val2 == 200:
+    print("Directional channel test passed")
+else:
+    print("Directional channel test failed")

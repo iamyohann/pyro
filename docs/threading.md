@@ -39,15 +39,15 @@ Pyro provides channels for synchronization and communication between threads, si
 Use the `chan(capacity)` built-in function to create a channel.
 
 ```python
-let c = chan(1) // Buffered channel with capacity 1
+let c = chan<int>(1) // Buffered channel of integers with capacity 1
 ```
 
 ### Sending and Receiving
 
-Use the `<-` operator to send and receive values.
+Use the `.push(value)` and `.collect()` methods to interact with channels.
 
--   **Send**: `channel <- value` (Statement)
--   **Receive**: `val = <- channel` (Expression)
+-   **Send**: `channel.push(value)`
+-   **Receive**: `val = channel.collect()`
 
 ```python
 import std.time
@@ -55,14 +55,30 @@ import std.time
 def worker(c):
     std.time.sleep(1.0)
     print("Worker sending")
-    c <- "Done"
+    c.push("Done")
 
-let c = chan(1)
+let c = chan<string>(1)
 go worker(c)
 
 print("Waiting...")
-let msg = <- c
+let msg = c.collect()
 print("Received: " + msg)
+```
+
+### Directional Channels
+
+You can restrict a channel to be send-only or receive-only using `.sender()` and `.receiver()` methods.
+
+```python
+let c = chan<int>(1)
+let tx = c.sender()   // Send-only
+let rx = c.receiver() // Receive-only
+
+tx.push(1)
+// tx.collect() // Error: Channel is send-only
+
+let val = rx.collect()
+// rx.push(2) // Error: Channel is receive-only
 ```
 
 Channels are safe to share across threads. Sending to a full channel blocks the sender (suspends the task), and receiving from an empty channel blocks the receiver.

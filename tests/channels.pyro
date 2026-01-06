@@ -4,7 +4,7 @@ def worker(c):
     print("Worker running")
     time.sleep(0.5)
     print("Worker sending 100")
-    c <- 100
+    c.push(100)
     print("Worker sent")
 
 print("Main starting")
@@ -13,7 +13,7 @@ let c = chan(1)
 go worker(c)
 
 print("Main waiting for receive")
-let val = <- c
+let val = c.collect()
 print("Main received: " + str(val))
 
 if val == 100:

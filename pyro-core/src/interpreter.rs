@@ -82,7 +82,11 @@ pub enum Value {
     },
     NativeModule(Arc<HashMap<String, Value>>),
     
-    Channel(Arc<(async_channel::Sender<Value>, async_channel::Receiver<Value>)>),
+    Channel {
+        sender: Option<Arc<async_channel::Sender<Value>>>,
+        receiver: Option<Arc<async_channel::Receiver<Value>>>,
+        typ: Type,
+    },
 
     Void,
 }
@@ -143,7 +147,13 @@ impl PartialEq for Value {
              },
              
              (Value::Void, Value::Void) => true,
-             (Value::Channel(c1), Value::Channel(c2)) => Arc::ptr_eq(c1, c2),
+             (Value::Channel { sender: s1, .. }, Value::Channel { sender: s2, .. }) => {
+                 match (s1, s2) {
+                     (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                     (None, None) => true,
+                     _ => false,
+                 }
+             },
              
              _ => false,
         }
@@ -317,20 +327,6 @@ impl Interpreter {
                          eprintln!("Error in go routine: {:?}", e);
                      }
                 });
-            }
-            Stmt::Send { channel, value } => {
-                let chan_val = self.evaluate(channel)?;
-                let send_val = self.evaluate(value)?;
-                match chan_val {
-                    Value::Channel(chan) => {
-                        let tx = &chan.0;
-                         match tokio::task::block_in_place(|| tx.send_blocking(send_val)) {
-                             Ok(_) => {},
-                             Err(_) => return Err(self.make_error("Channel closed")),
-                         }
-                    },
-                    _ => return Err(self.make_error("Send expects a channel")),
-                }
             }
             Stmt::VarDecl { name, value, .. } => {
                 let val = self.evaluate(value)?;
@@ -684,7 +680,7 @@ impl Interpreter {
                     _ => Err(self.make_error("Type is not indexable")),
                 }
             }
-            Expr::Call { function, args } => {
+            Expr::Call { function, generics, args } => {
                 let func_val = self.evaluate(*function)?;
                 
                 let mut evaluated_args = Vec::new();
@@ -692,22 +688,9 @@ impl Interpreter {
                      evaluated_args.push(self.evaluate(arg_expr)?);
                 }
                 
-                return self.apply(func_val, evaluated_args);
+                return self.apply(func_val, evaluated_args, generics);
 
 
-            }
-            Expr::Receive(expr) => {
-                let val = self.evaluate(*expr)?;
-                match val {
-                    Value::Channel(chan) => {
-                         let rx = &chan.1;
-                         match tokio::task::block_in_place(|| rx.recv_blocking()) {
-                             Ok(v) => Ok(v),
-                             Err(_) => Err(self.make_error("Channel closed")),
-                         }
-                    }
-                    _ => Err(self.make_error("Receive expects a channel")),
-                }
             }
         }
     }
@@ -901,12 +884,77 @@ impl Interpreter {
                     _ => Err(self.make_error(&format!("Method '{}' not found on String", name))),
                 }
             }
+
+            Value::Channel { sender, receiver, typ } => {
+                match name {
+                    "push" => {
+                        if args.len() != 1 { return Err(self.make_error("push expects 1 argument")); }
+                         if let Some(tx) = sender {
+                             match tokio::task::block_in_place(|| tx.send_blocking(args[0].clone())) {
+                                 Ok(_) => Ok(Value::Void),
+                                 Err(_) => return Err(self.make_error("Channel closed")),
+                             }
+                        } else {
+                            Err(self.make_error("Channel is receive-only"))
+                        }
+                    }
+                    "collect" => {
+                         if !args.is_empty() { return Err(self.make_error("collect expects 0 arguments")); }
+                         if let Some(rx) = receiver {
+                             match tokio::task::block_in_place(|| rx.recv_blocking()) {
+                                 Ok(v) => Ok(v),
+                                 Err(_) => Err(self.make_error("Channel closed or empty")),
+                             }
+                        } else {
+                            Err(self.make_error("Channel is send-only"))
+                        }
+                    }
+                    "close" => {
+                        if let Some(tx) = sender {
+                            tx.close();
+                            Ok(Value::Void)
+                        } else {
+                             // If receive only, can we close? Usually sender closes.
+                             // async_channel receiver can close too.
+                             if let Some(rx) = receiver {
+                                 rx.close();
+                                 Ok(Value::Void)
+                             } else {
+                                 Ok(Value::Void)
+                             }
+                        }
+                    }
+                    "sender" => {
+                        if sender.is_some() {
+                             Ok(Value::Channel {
+                                 sender: sender.clone(),
+                                 receiver: None,
+                                 typ: typ.clone(),
+                             })
+                        } else {
+                            Err(self.make_error("Channel does not have a sender"))
+                        }
+                    }
+                    "receiver" => {
+                         if receiver.is_some() {
+                             Ok(Value::Channel {
+                                 sender: None,
+                                 receiver: receiver.clone(),
+                                 typ: typ.clone(),
+                             })
+                        } else {
+                            Err(self.make_error("Channel does not have a receiver"))
+                        }
+                    }
+                    _ => Err(self.make_error(&format!("Method '{}' not found on Channel", name))),
+                }
+            }
              _ => Err(self.make_error(&format!("Type does not support method '{}'", name))),
         }
     }
 
     // Helper for applying arguments with currying support
-    fn apply(&mut self, func: Value, args: Vec<Value>) -> Result<Value, Value> {
+    fn apply(&mut self, func: Value, args: Vec<Value>, call_generics: Vec<Type>) -> Result<Value, Value> {
         match func {
             Value::Function { generics, params, body, partial_args } => {
                 let mut all_args = partial_args.clone();
@@ -947,9 +995,9 @@ impl Interpreter {
                         params: params.clone(),
                         body: body.clone(),
                         partial_args: needed.to_vec(),
-                    }, Vec::new())?;
+                    }, Vec::new(), call_generics.clone())?;
                     
-                    self.apply(result, remaining.to_vec())
+                    self.apply(result, remaining.to_vec(), Vec::new())
                 }
             }
             Value::RecordConstructor { name, fields, methods, partial_args } => {
@@ -978,8 +1026,8 @@ impl Interpreter {
                         fields: fields.clone(), 
                         methods: methods.clone(),
                         partial_args: needed.to_vec() 
-                    }, Vec::new())?;
-                     self.apply(result, remaining.to_vec())
+                    }, Vec::new(), call_generics.clone())?;
+                     self.apply(result, remaining.to_vec(), Vec::new())
                 }
             }
             Value::Class { name, methods, .. } => {
@@ -998,7 +1046,7 @@ impl Interpreter {
                              params: params.clone(),
                              body: body.clone(),
                              partial_args: partial_args.clone(),
-                         }, init_args)?;
+                         }, init_args, call_generics)?;
                      }
                  }
                  Ok(instance)
@@ -1011,9 +1059,9 @@ impl Interpreter {
                          new_partial.extend(partial_args.clone()); 
                          return self.apply(Value::Function {
                              generics: generics.clone(), params: params.clone(), body: body.clone(), partial_args: new_partial
-                         }, call_args);
+                         }, call_args, call_generics);
                      } else {
-                         return self.apply(*method, call_args);
+                         return self.apply(*method, call_args, call_generics);
                      }
                 }
                 Err(self.make_error("BoundMethod expects Function"))
@@ -1075,7 +1123,18 @@ impl Interpreter {
                      // async-channel requires capacity >= 1
                      let cap = if capacity < 1 { 1 } else { capacity };
                      let (tx, rx) = async_channel::bounded(cap);
-                     Ok(Value::Channel(Arc::new((tx, rx))))
+                     
+                     let channel_type = if call_generics.is_empty() {
+                         Type::UserDefined("Any".to_string(), Vec::new())
+                     } else {
+                         call_generics[0].clone()
+                     };
+
+                     Ok(Value::Channel {
+                        sender: Some(Arc::new(tx)),
+                        receiver: Some(Arc::new(rx)),
+                        typ: channel_type,
+                     })
                   } else {
                      Err(self.make_error(&format!("Unknown builtin function: {}", name)))
                  }

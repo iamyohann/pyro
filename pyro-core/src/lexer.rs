@@ -29,6 +29,7 @@ pub enum Token {
     Raise,
     From,
     Go,
+    Chan,
 
     // Identifiers and Literals
     Identifier(String),
@@ -59,7 +60,6 @@ pub enum Token {
     RBracket,    // ]
     LBrace,      // {
     RBrace,      // }
-    ArrowLeft,   // <-
 
     // Significant Whitespace
     Indent,
@@ -142,8 +142,11 @@ impl<'a> Lexer<'a> {
                         tokens.push(Token::LessEqual);
                     } else if let Some(&'-') = self.input.peek() {
                         // Check for ArrowLeft <-
-                        self.input.next();
-                        tokens.push(Token::ArrowLeft);
+                        // self.input.next();
+                        // tokens.push(Token::ArrowLeft);
+                        tokens.push(Token::Less); // Treat as just Less if <- is removed?
+                        // Or just remove the branch if we don't support it anymore.
+                        // Actually if we remove support, < followed by - is Less, Minus
                     } else {
                         tokens.push(Token::Less);
                     }
@@ -282,6 +285,7 @@ impl<'a> Lexer<'a> {
             "raise" => Token::Raise,
             "from" => Token::From,
             "go" => Token::Go,
+            "chan" => Token::Chan,
             _ => Token::Identifier(ident),
         }
     }
