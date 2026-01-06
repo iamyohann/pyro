@@ -1,0 +1,24 @@
+import std.random
+
+let r = random.random()
+if r >= 0.0:
+    if r <= 1.0:
+        print("PASSED: random range")
+    else:
+        print("FAILED: random > 1.0")
+else:
+    print("FAILED: random < 0.0")
+
+let i = random.randint(1, 10)
+if i >= 1:
+    if i <= 10:
+        print("PASSED: randint range")
+    else:
+        print("FAILED: randint > 10")
+else:
+    print("FAILED: randint < 1")
+
+print("Random float: ")
+print(r)
+print("Random int: ")
+print(i)

@@ -1,0 +1,26 @@
+import std.json
+
+let obj = {"a": 1, "b": "hello", "c": [1, 2, 3]}
+let s = json.stringify(obj)
+print("JSON: " + s)
+
+if s.contains("hello"):
+    print("PASSED: stringify")
+else:
+    print("FAILED: stringify")
+
+let parsed = json.parse(s)
+if parsed["b"] != "hello":
+    print("FAILED: parse key b")
+else:
+    print("PASSED: parse key b")
+
+if parsed["a"] != 1:
+    print("FAILED: parse key a")
+else:
+    print("PASSED: parse key a")
+
+if parsed["c"].len() != 3:
+    print("FAILED: parse key c length")
+else:
+    print("PASSED: parse key c length")

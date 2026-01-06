@@ -24,3 +24,10 @@ if duration >= 0.5:
     print("Sleep test passed!")
 else:
     print("Sleep test failed!")
+    print("Sleep test failed!")
+
+print("Testing extended math...")
+print(math.pi())
+print(math.e())
+print(math.asin(0.5))
+print(time.millis())

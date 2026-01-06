@@ -518,7 +518,77 @@ impl Interpreter {
                     (Value::Float(a), BinaryOp::Gte, Value::Float(b)) => Ok(Value::Bool(a >= b)),
                     (Value::Float(a), BinaryOp::Lte, Value::Float(b)) => Ok(Value::Bool(a <= b)),
 
+                    // Bool ops
+                    (Value::Bool(a), BinaryOp::Eq, Value::Bool(b)) => Ok(Value::Bool(a == b)),
+                    (Value::Bool(a), BinaryOp::Neq, Value::Bool(b)) => Ok(Value::Bool(a != b)),
+
                     _ => Err(self.make_error("Unsupported operation")),
+                }
+            }
+            Expr::Index { object, index } => {
+                let obj_val = self.evaluate(*object)?;
+                let idx_val = self.evaluate(*index)?;
+
+                match obj_val {
+                    Value::List(l) => {
+                        if let Value::Int(i) = idx_val {
+                             let idx = i as usize;
+                             if i < 0 || idx >= l.len() { return Err(self.make_error("Index out of bounds")); }
+                             Ok(l[idx].clone())
+                        } else { Err(self.make_error("List index must be integer")) }
+                    }
+                    Value::ListMutable(l) => {
+                         let list = l.borrow();
+                         if let Value::Int(i) = idx_val {
+                            let idx = i as usize;
+                            if i < 0 || idx >= list.len() { return Err(self.make_error("Index out of bounds")); }
+                            Ok(list[idx].clone())
+                        } else { Err(self.make_error("List index must be integer")) }
+                    }
+                    Value::Tuple(l) => {
+                         if let Value::Int(i) = idx_val {
+                             let idx = i as usize;
+                             if i < 0 || idx >= l.len() { return Err(self.make_error("Index out of bounds")); }
+                             Ok(l[idx].clone())
+                        } else { Err(self.make_error("Tuple index must be integer")) }
+                    }
+                    Value::TupleMutable(l) => {
+                         let list = l.borrow();
+                         if let Value::Int(i) = idx_val {
+                            let idx = i as usize;
+                            if i < 0 || idx >= list.len() { return Err(self.make_error("Index out of bounds")); }
+                            Ok(list[idx].clone())
+                        } else { Err(self.make_error("Tuple index must be integer")) }
+                    }
+                    Value::String(s) => {
+                         if let Value::Int(i) = idx_val {
+                             let idx = i as usize;
+                             if i < 0 || idx >= s.len() { return Err(self.make_error("Index out of bounds")); }
+                             if let Some(c) = s.chars().nth(idx) {
+                                 Ok(Value::String(Rc::new(c.to_string())))
+                             } else {
+                                  Err(self.make_error("Index out of bounds"))
+                             }
+                        } else { Err(self.make_error("String index must be integer")) }
+                    }
+                    Value::Dict(d) => {
+                         for (k, v) in d.iter() {
+                            if k == &idx_val {
+                                return Ok(v.clone());
+                            }
+                        }
+                        Err(self.make_error("Key error"))
+                    }
+                    Value::DictMutable(d) => {
+                        let dict = d.borrow();
+                         for (k, v) in dict.iter() {
+                            if k == &idx_val {
+                                return Ok(v.clone());
+                            }
+                        }
+                        Err(self.make_error("Key error"))
+                    }
+                    _ => Err(self.make_error("Type is not indexable")),
                 }
             }
             Expr::Call { function, args } => {

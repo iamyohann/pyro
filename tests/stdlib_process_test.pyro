@@ -1,0 +1,15 @@
+import std.process
+
+let output = process.exec("echo", ["hello"])
+if output["code"] != 0:
+    print("FAILED: exec code")
+    print(output["code"])
+else:
+    if output["stdout"].contains("hello"):
+        print("PASSED: exec stdout")
+    else:
+        print("FAILED: exec stdout")
+        print(output["stdout"])
+
+# Explicit exit test would kill the test runner, so we skip it or put it last
+# process.exit(0)

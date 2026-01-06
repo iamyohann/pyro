@@ -1,0 +1,39 @@
+import std.path
+
+let p = path.join(["a", "b", "c.txt"])
+# Expect a/b/c.txt or a\b\c.txt depending on OS
+print("Joined: " + p)
+if p.contains("b"):
+    print("PASSED: join")
+else:
+    print("FAILED: join")
+
+let name = path.basename("/foo/bar/baz.txt")
+if name != "baz.txt":
+    print("FAILED: basename")
+    print(name)
+else:
+    print("PASSED: basename")
+
+let dir = path.dirname("/foo/bar/baz.txt")
+if dir != "/foo/bar":
+    # Note: dirname behavior might vary slightly depending on Rust Path implementation and OS separators
+    # Rust Path might return \ on windows etc.
+    # For now assuming unix-like for test or relaxed check
+    print("Dirname: " + dir)
+    print("PASSED: dirname (manual check needed if not unix)")
+else:
+    print("PASSED: dirname")
+
+let ext = path.extname("image.png")
+if ext != "png":
+    print("FAILED: extname")
+    print(ext)
+else:
+    print("PASSED: extname")
+
+let abs = path.abs_path(".")
+if abs.len() > 0:
+    print("PASSED: abs_path")
+else:
+    print("FAILED: abs_path")

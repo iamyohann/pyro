@@ -1,0 +1,33 @@
+import std.env
+
+let cwd = env.cwd()
+if cwd.len() == 0:
+    print("FAILED: cwd empty")
+else:
+    print("PASSED: cwd")
+
+print("CWD: " + cwd)
+
+let vars = env.vars()
+if vars.len() == 0:
+    print("FAILED: vars empty")
+else:
+    print("PASSED: vars")
+
+let args = env.args()
+if args.len() == 0:
+    print("FAILED: args empty")
+else:
+    print("PASSED: args")
+
+# Cannot easily test set_cwd without affecting other tests or needing restore, 
+# but we can try setting it to same cwd
+env.set_cwd(cwd)
+print("PASSED: set_cwd")
+
+let path_val = env.var("PATH")
+if path_val.len() == 0:
+    # Maybe PATH is missing? Unlikely.
+    print("WARNING: PATH env var empty or missing")
+else:
+    print("PASSED: var(PATH)")

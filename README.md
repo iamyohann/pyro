@@ -34,6 +34,7 @@ See [docs/tutorial.md](docs/tutorial.md).
 - [Data Structures](docs/datastructures.md)
 - [Error Handling](docs/error_handling.md)
 - [Native Bindings](docs/native_bindings.md)
+- [Standard Library](docs/stdlib.md)
 
 ## Features
 - **Syntax**: Python-like (indentation-based).

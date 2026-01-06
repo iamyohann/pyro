@@ -26,6 +26,14 @@ fn sleep(args: Vec<Value>) -> Result<Value, Value> {
     Ok(Value::Void)
 }
 
+fn millis(_args: Vec<Value>) -> Result<Value, Value> {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| Value::String(Rc::new(e.to_string())))?;
+    Ok(Value::Int(since_the_epoch.as_millis() as i64))
+}
+
 pub fn module() -> Value {
     let mut methods = HashMap::new();
     
@@ -37,6 +45,10 @@ pub fn module() -> Value {
     methods.insert("sleep".to_string(), Value::NativeFunction {
         name: "sleep".to_string(),
         func: NativeClosure(Rc::new(sleep)),
+    });
+    methods.insert("millis".to_string(), Value::NativeFunction {
+        name: "millis".to_string(),
+        func: NativeClosure(Rc::new(millis)),
     });
 
     Value::NativeModule(Rc::new(methods))

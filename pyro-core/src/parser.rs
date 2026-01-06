@@ -340,6 +340,16 @@ impl<'a> Parser<'a> {
                     object: Box::new(expr),
                     name,
                 };
+            } else if let Some(Token::LBracket) = self.tokens.peek() {
+                self.tokens.next(); // consume [
+                let index = self.parse_expression()?;
+                if let Some(Token::RBracket) = self.tokens.next() {} else {
+                    return Err("Expected ']' after index".to_string());
+                }
+                expr = Expr::Index {
+                    object: Box::new(expr),
+                    index: Box::new(index),
+                };
             } else {
                 break;
             }

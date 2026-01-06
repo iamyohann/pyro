@@ -1,0 +1,60 @@
+import std.fs
+import std.path
+
+let test_dir = "test_fs_dir"
+let test_file = path.join([test_dir, "hello.txt"])
+
+if fs.exists(test_dir):
+    fs.remove_dir(test_dir)
+
+fs.create_dir(test_dir)
+if fs.exists(test_dir) == (1 == 0):
+    print("FAILED: create_dir")
+else:
+    print("PASSED: create_dir")
+
+if fs.is_dir(test_dir) == (1 == 0):
+    print("FAILED: is_dir")
+else:
+    print("PASSED: is_dir")
+
+fs.write(test_file, "Hello Pyro!")
+if fs.exists(test_file) == (1 == 0):
+    print("FAILED: write/exists")
+else:
+    print("PASSED: write/exists")
+
+if fs.is_file(test_file) == (1 == 0):
+    print("FAILED: is_file")
+else:
+    print("PASSED: is_file")
+
+let content = fs.read_to_string(test_file)
+if content != "Hello Pyro!":
+    print("FAILED: read_to_string")
+    print(content)
+else:
+    print("PASSED: read_to_string")
+
+let files = fs.list_dir(test_dir)
+if files.len() != 1:
+    print("FAILED: list_dir length")
+    print(files)
+else:
+    if files[0] != "hello.txt":
+        print("FAILED: list_dir content")
+        print(files)
+    else:
+        print("PASSED: list_dir")
+
+fs.remove_file(test_file)
+if fs.exists(test_file):
+    print("FAILED: remove_file")
+else:
+    print("PASSED: remove_file")
+
+fs.remove_dir(test_dir)
+if fs.exists(test_dir):
+    print("FAILED: remove_dir")
+else:
+    print("PASSED: remove_dir")

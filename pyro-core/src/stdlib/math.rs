@@ -104,6 +104,81 @@ fn pow(args: Vec<Value>) -> Result<Value, Value> {
     Ok(base.powf(exp).to_value())
 }
 
+fn asin(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 1 {
+        return Err(Value::String(Rc::new("Expected 1 argument".to_string())));
+    }
+    let val: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(val.asin().to_value())
+}
+
+fn acos(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 1 {
+        return Err(Value::String(Rc::new("Expected 1 argument".to_string())));
+    }
+    let val: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(val.acos().to_value())
+}
+
+fn atan(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 1 {
+        return Err(Value::String(Rc::new("Expected 1 argument".to_string())));
+    }
+    let val: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(val.atan().to_value())
+}
+
+fn atan2(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 2 {
+        return Err(Value::String(Rc::new("Expected 2 arguments".to_string())));
+    }
+    let y: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    let x: f64 = FromPyroValue::from_value(&args[1])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(y.atan2(x).to_value())
+}
+
+fn log(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 2 {
+        return Err(Value::String(Rc::new("Expected 2 arguments".to_string())));
+    }
+    let val: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    let base: f64 = FromPyroValue::from_value(&args[1])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(val.log(base).to_value())
+}
+
+fn log2(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 1 {
+        return Err(Value::String(Rc::new("Expected 1 argument".to_string())));
+    }
+    let val: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(val.log2().to_value())
+}
+
+fn log10(args: Vec<Value>) -> Result<Value, Value> {
+    if args.len() != 1 {
+        return Err(Value::String(Rc::new("Expected 1 argument".to_string())));
+    }
+    let val: f64 = FromPyroValue::from_value(&args[0])
+        .map_err(|e| Value::String(Rc::new(e)))?;
+    Ok(val.log10().to_value())
+}
+
+fn pi(_args: Vec<Value>) -> Result<Value, Value> {
+    Ok(std::f64::consts::PI.to_value())
+}
+
+fn e(_args: Vec<Value>) -> Result<Value, Value> {
+    Ok(std::f64::consts::E.to_value())
+}
+
 pub fn module() -> Value {
     let mut methods = HashMap::new();
     
@@ -142,6 +217,42 @@ pub fn module() -> Value {
     methods.insert("pow".to_string(), Value::NativeFunction {
         name: "pow".to_string(),
         func: NativeClosure(Rc::new(pow)),
+    });
+    methods.insert("asin".to_string(), Value::NativeFunction {
+        name: "asin".to_string(),
+        func: NativeClosure(Rc::new(asin)),
+    });
+    methods.insert("acos".to_string(), Value::NativeFunction {
+        name: "acos".to_string(),
+        func: NativeClosure(Rc::new(acos)),
+    });
+    methods.insert("atan".to_string(), Value::NativeFunction {
+        name: "atan".to_string(),
+        func: NativeClosure(Rc::new(atan)),
+    });
+    methods.insert("atan2".to_string(), Value::NativeFunction {
+        name: "atan2".to_string(),
+        func: NativeClosure(Rc::new(atan2)),
+    });
+    methods.insert("log".to_string(), Value::NativeFunction {
+        name: "log".to_string(),
+        func: NativeClosure(Rc::new(log)),
+    });
+    methods.insert("log2".to_string(), Value::NativeFunction {
+        name: "log2".to_string(),
+        func: NativeClosure(Rc::new(log2)),
+    });
+    methods.insert("log10".to_string(), Value::NativeFunction {
+        name: "log10".to_string(),
+        func: NativeClosure(Rc::new(log10)),
+    });
+    methods.insert("pi".to_string(), Value::NativeFunction {
+        name: "pi".to_string(),
+        func: NativeClosure(Rc::new(pi)),
+    });
+    methods.insert("e".to_string(), Value::NativeFunction {
+        name: "e".to_string(),
+        func: NativeClosure(Rc::new(e)),
     });
 
     Value::NativeModule(Rc::new(methods))

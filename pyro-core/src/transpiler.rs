@@ -200,6 +200,7 @@ impl Transpiler {
                 }
                 self.output.push_str(")");
             }
+            Expr::Index { .. } => todo!("Transpilation for index not implemented"),
             Expr::Get { .. } => todo!("Transpilation for methods not implemented"),
             Expr::List(elements) => {
                  self.output.push_str("vec![");

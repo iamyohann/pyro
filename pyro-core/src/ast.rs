@@ -47,6 +47,10 @@ pub enum Expr {
         object: Box<Expr>,
         name: String,
     },
+    Index {
+        object: Box<Expr>,
+        index: Box<Expr>,
+    },
     Call {
         function: Box<Expr>,
         args: Vec<Expr>,
