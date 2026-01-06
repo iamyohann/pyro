@@ -36,6 +36,7 @@ pub enum Token {
     Integer(i64),
     Float(f64),
     StringLiteral(String),
+    Bool(bool),
 
     // Symbols
     Plus,
