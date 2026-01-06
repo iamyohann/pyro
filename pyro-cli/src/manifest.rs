@@ -15,7 +15,7 @@ pub struct Manifest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RustConfig {
-    #[serde(default)]
+    #[serde(flatten)]
     pub dependencies: HashMap<String, String>,
 }
 
@@ -54,13 +54,27 @@ impl Manifest {
     }
 
     pub fn load() -> Result<Self> {
-        let path = Path::new("pyro.mod");
-        if !path.exists() {
-            anyhow::bail!("pyro.mod not found");
+        Self::resolve_from(std::env::current_dir()?)
+    }
+
+    pub fn resolve_from<P: AsRef<Path>>(start_path: P) -> Result<Self> {
+        let mut current_dir = start_path.as_ref().to_path_buf();
+        if current_dir.is_file() {
+            current_dir.pop();
         }
-        let content = fs::read_to_string(path).context("Failed to read pyro.mod")?;
-        let manifest: Manifest = toml::from_str(&content).context("Failed to parse pyro.mod")?;
-        Ok(manifest)
+
+        loop {
+            let path = current_dir.join("pyro.mod");
+            if path.exists() {
+               let content = fs::read_to_string(&path).context("Failed to read pyro.mod")?;
+               let manifest: Manifest = toml::from_str(&content).context("Failed to parse pyro.mod")?;
+               return Ok(manifest);
+            }
+
+            if !current_dir.pop() {
+                anyhow::bail!("pyro.mod not found");
+            }
+        }
     }
 
     pub fn save(&self) -> Result<()> {

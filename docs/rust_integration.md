@@ -16,38 +16,62 @@ rand = "0.8"
 base64 = "0.21"
 ```
 
-## Using Native Functions
+## Auto-Generated Bindings
 
-You can define native functions in a `native.rs` file in your project root. These functions can be essentially "linked" to Pyro using the `extern` syntax.
+The easiest way to call Rust code is to use Pyro's auto-binding generation. You declare an `extern` function with a string literal pointing to the Rust function's path. Pyro will automatically generate the glue code to marshal arguments and return values.
+
+### Example
+
+```python
+# main.pyro
+extern "rand::random" def rand_float() -> float
+extern "base64::encode" def b64_encode(input: string) -> string
+
+let x = rand_float()
+print(x)
+
+let encoded = b64_encode("hello world")
+print(encoded)
+```
+
+The Pyro CLI (`pyro run`) handles the rest:
+1.  Detects `[rust]` dependencies in `pyro.mod`.
+2.  Scans your code for `extern "path" def ...`.
+3.  Generates a Rust wrapper project in `~/.pyro/rustpkg/<project_hash>`.
+4.  Compiles and runs your code with the native extensions linked.
+
+### Supported Types
+
+Currently, the auto-generator supports mapping the following primitive types:
+
+| Pyro Type | Rust Type |
+| :--- | :--- |
+| `int` | `i64` |
+| `float` | `f64` |
+| `bool` | `bool` |
+| `string` | `String` |
+| `void` | `()` |
+
+## Manual Native Functions (Advanced)
+
+For more complex logic that requires manual argument parsing or state management, you can still define a `native.rs` file in your project root.
 
 ### 1. Create `native.rs`
-Create a `native.rs` file and define your public Rust functions. They must follow the signature `fn(Vec<Value>) -> Result<Value, Value>`.
+
+Define your public Rust functions with the signature `fn(Vec<Value>) -> Result<Value, Value>`.
 
 ```rust
 // native.rs
 use pyro_core::interpreter::Value;
 
-pub fn rand_float(_args: Vec<Value>) -> Result<Value, Value> {
-    let x: f64 = rand::random();
-    Ok(Value::Float(x))
+pub fn my_complex_func(args: Vec<Value>) -> Result<Value, Value> {
+    // Manual argument handling
+    Ok(Value::Bool(true))
 }
 ```
 
 ### 2. Declare in Pyro
-In your `main.pyro` (or any Pyro file), use the `extern` keyword to declare these functions. Pyro's build system will automatically generate the bindings for you.
 
 ```python
-extern def rand_float() -> float
-
-let x = rand_float()
-print(x)
+extern def my_complex_func() -> bool
 ```
-
-## How it Works
-
-When you run `pyro run`, the CLI detects the `[rust]` dependencies and the `native.rs` file. It then:
-1.  Creates a temporary Rust project in `~/.pyro/rustpkg`.
-2.  Generates a custom runner that includes your dependencies and registers your native functions.
-3.  Compiles and runs the project using `cargo`.
-
-This process is transparent, allowing you to mix high-level Pyro code with low-level Rust performance effortlessly.

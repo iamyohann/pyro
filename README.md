@@ -15,8 +15,19 @@ git clone https://github.com/iamyohann/pyro.git
 
 cd pyro
 
-### Build the CLI
+### Install via Script
+This will build Pyro and set up the runner environment for native dependencies.
+
+```bash
+time ./install.sh
+```
+
+### Manual Build
+If you prefer to build manually:
+
+```bash
 cargo build --release
+```
 
 ## Example usage
 

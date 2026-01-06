@@ -2,6 +2,10 @@
 
 Pyro allows extending the language with native Rust functions and modules. This is achieved through the Native Interface Layer.
 
+> [!TIP]
+> For simple integrations with existing Rust crates, check out [Rust Integration](rust_integration.md) for an easier, automated workflow.
+
+
 ## Structure
 
 Native modules are registered in the `Interpreter` via the `native_modules` registry. A native module is simply a `Value::NativeModule` which contains a map of export names to `Value`s (typically `Value::NativeFunction`).

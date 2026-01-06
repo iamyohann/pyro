@@ -13,8 +13,6 @@ impl Transpiler {
 
     pub fn transpile(&mut self, statements: Vec<Stmt>) -> String {
         self.output.clear();
-        // Add prelude/helper code if necessary
-        // For now, minimal rust
         
         for stmt in statements {
             self.transpile_stmt(stmt, 0);
@@ -32,11 +30,35 @@ impl Transpiler {
     fn transpile_stmt(&mut self, stmt: Stmt, indent: usize) {
         self.push_indent(indent);
         match stmt {
-            Stmt::Extern { .. } => {
-                // Transpiler needs to handle extern?
-                // For now, ignore or emit comment.
+            Stmt::Extern { func_name, generics: _, params, return_type, rust_path } => {
+                if let Some(path) = rust_path {
+                    self.output.push_str(&format!("fn usr_{}(", func_name));
+                    for (i, (p_name, p_type)) in params.iter().enumerate() {
+                        if i > 0 { self.output.push_str(", "); }
+                        self.output.push_str(&format!("usr_{}: {}", p_name, self.map_type(&p_type)));
+                    }
+                    self.output.push_str(") ");
+                    
+                    if return_type != Type::Void {
+                        self.output.push_str(&format!("-> {} ", self.map_type(&return_type)));
+                    }
+    
+                    self.output.push_str("{\n");
+                    self.push_indent(indent + 1);
+                    self.output.push_str(&path);
+                    self.output.push_str("(");
+                    for (i, (p_name, _)) in params.iter().enumerate() {
+                        if i > 0 { self.output.push_str(", "); }
+                        self.output.push_str(&format!("usr_{}", p_name));
+                    }
+                    self.output.push_str(")\n");
+                    self.push_indent(indent);
+                    self.output.push_str("}\n");
+                } else {
+                     self.output.push_str(&format!("// extern {} missing path\n", func_name));
+                }
             }
-            Stmt::VarDecl { name, typ, value, mutable: _ } => {
+            Stmt::VarDecl { name, typ:_, value, mutable: _ } => {
                 self.output.push_str(&format!("let mut usr_{} = ", name));
                 self.transpile_expr(value);
                 self.output.push_str(";\n");
@@ -80,9 +102,6 @@ impl Transpiler {
                 self.output.push_str("}\n");
             }
             Stmt::FnDecl { name, generics: _, params, return_type, body } => {
-                // Rust requires types for params. If we don't have them inferred/specified, we might have issues.
-                // Assuming AST has types populated (Parser does rudimentary parsing)
-                
                 self.output.push_str(&format!("fn usr_{}(", name));
                 for (i, (p_name, p_type)) in params.iter().enumerate() {
                     if i > 0 { self.output.push_str(", "); }
@@ -102,10 +121,6 @@ impl Transpiler {
                 self.output.push_str("}\n");
             }
             Stmt::RecordDef { name, generics: _, fields, methods: _ } => {
-                // Rust struct (tuple struct?)
-                // record Point(x: int, y: int) -> struct Point { x: i64, y: i64 }
-                // or tuple struct Point(i64, i64);
-                // Let's do named fields for clarity
                 self.output.push_str(&format!("struct {} {{\n", name));
                 for (f_name, f_type) in fields {
                      self.output.push_str(&format!("    pub {}: {},\n", f_name, self.map_type(&f_type)));
@@ -121,16 +136,14 @@ impl Transpiler {
                 self.output.push_str(";\n");
             }
             Stmt::Import(_) => {
-                // Ignore imports for now in transpiler or handle same as others
+                // Ignore imports
             }
             Stmt::Go(_) => {
-                // Transpiling 'go' requires support in target language (Rust)
-                // For now, todo!()
                 todo!("Transpilation for 'go' keyword not yet implemented");
             }
             Stmt::For { item_name, iterable, body } => {
                 self.push_indent(indent);
-                self.output.push_str(&format!("for {} in ", item_name));
+                self.output.push_str(&format!("for usr_{} in ", item_name)); // Ensure loop var is prefixed
                 self.transpile_expr(iterable);
                 self.output.push_str(" {\n");
                 for s in body {
@@ -143,13 +156,11 @@ impl Transpiler {
                  self.output.push_str("// type defs not yet supported in transpiler \n");
             }
             Stmt::Set { .. } | Stmt::ClassDecl { .. } => {
-                // TODO: Class support
                 self.output.push_str("// class/set not supported in transpiler yet \n");
             }
             Stmt::Break => self.output.push_str("break;\n"),
             Stmt::Continue => self.output.push_str("continue;\n"),
             Stmt::Try { .. } | Stmt::Raise { .. } => todo!("Transpilation for Try/Raise not implemented"),
-            Stmt::Import(_) => {} // imports handled separately or ignored for now in simple transpiler
         }
     }
 
@@ -172,7 +183,7 @@ impl Transpiler {
                 self.output.push_str("(");
                 self.transpile_expr(*left);
                 self.output.push_str(match op {
-                    BinaryOp::Add => " + ",
+                    BinaryOp::Add => " + &",
                     BinaryOp::Sub => " - ",
                     BinaryOp::Mul => " * ",
                     BinaryOp::Div => " / ",
@@ -200,6 +211,16 @@ impl Transpiler {
                         return;
                     }
 
+                    if name == "str" {
+                         if let Some(arg) = args.first() {
+                             self.transpile_expr(arg.clone());
+                             self.output.push_str(".to_string()");
+                         } else {
+                             self.output.push_str("\"\".to_string()");
+                         }
+                         return;
+                    }
+
                     if name == "chan" {
                         // Special handling for chan
                         let type_str = if generics.is_empty() {
@@ -222,9 +243,6 @@ impl Transpiler {
                 }
                 
                 self.transpile_expr(*function);
-                // TODO: emit generics in call? e.g. ::<args>
-                // If it's a function call in Rust, we might need ::<T>
-                // But simple transpiler might ignore for now unless it's chan
                 self.output.push_str("(");
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 { self.output.push_str(", "); }

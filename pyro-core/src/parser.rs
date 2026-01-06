@@ -1129,9 +1129,15 @@ impl<'a> Parser<'a> {
 
     fn parse_extern(&mut self) -> Result<Stmt, String> {
         self.tokens.next(); // consume extern
-        
+
+        let mut rust_path = None;
+        if let Some(Token::StringLiteral(s)) = self.tokens.peek() {
+            rust_path = Some(s.clone());
+            self.tokens.next();
+        }
+
         if let Some(Token::Def) = self.tokens.next() {} else {
-             return Err("Expected 'def' after 'extern'".to_string());
+            return Err("Expected 'def' after extern".to_string());
         }
 
         let name = match self.tokens.next() {
@@ -1183,6 +1189,7 @@ impl<'a> Parser<'a> {
             generics,
             params,
             return_type,
+            rust_path,
         })
     }
 }

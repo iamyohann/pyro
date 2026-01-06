@@ -143,6 +143,7 @@ pub enum Stmt {
         generics: Vec<String>,
         params: Vec<(String, Type)>,
         return_type: Type,
+        rust_path: Option<String>,
     },
 
 }
