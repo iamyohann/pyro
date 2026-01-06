@@ -75,6 +75,14 @@ impl<'a> Parser<'a> {
                         Expr::Get { object, name } => Ok(Stmt::Set { object: *object, name, value }),
                         _ => Err("Invalid assignment target".to_string()),
                     }
+                } else if let Some(Token::ArrowLeft) = self.tokens.peek() {
+                    self.tokens.next(); // consume <-
+                    let value = self.parse_expression()?; // Send is expr <- expr (statement)
+                    // The 'expr' we parsed is the channel. 'value' is what we send.
+                    if let Some(Token::Newline) = self.tokens.peek() {
+                        self.tokens.next();
+                    }
+                    Ok(Stmt::Send { channel: expr, value })
                 } else {
                     // Consume optional newline after expression statement
                     if let Some(Token::Newline) = self.tokens.peek() {
@@ -271,7 +279,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_factor(&mut self) -> Result<Expr, String> {
-        let mut left = self.parse_primary()?;
+        let mut left = self.parse_unary()?;
 
         while let Some(&token) = self.tokens.peek() {
             let op = match token {
@@ -280,7 +288,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.tokens.next();
-            let right = self.parse_primary()?;
+            let right = self.parse_unary()?;
             left = Expr::Binary {
                 left: Box::new(left),
                 op,
@@ -288,6 +296,16 @@ impl<'a> Parser<'a> {
             };
         }
         Ok(left)
+    }
+
+    fn parse_unary(&mut self) -> Result<Expr, String> {
+        if let Some(Token::ArrowLeft) = self.tokens.peek() {
+            self.tokens.next();
+            let right = self.parse_unary()?;
+            Ok(Expr::Receive(Box::new(right)))
+        } else {
+            self.parse_primary()
+        }
     }
 
     fn parse_primary(&mut self) -> Result<Expr, String> {

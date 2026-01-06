@@ -146,6 +146,7 @@ impl Transpiler {
             Stmt::Continue => self.output.push_str("continue;\n"),
             Stmt::Try { .. } | Stmt::Raise { .. } => todo!("Transpilation for Try/Raise not implemented"),
             Stmt::Import(_) => {} // imports handled separately or ignored for now in simple transpiler
+            Stmt::Send { .. } => todo!("Transpilation for 'send' stmt not yet implemented"),
         }
     }
 
@@ -248,6 +249,7 @@ impl Transpiler {
                  }
                  self.output.push_str("])");
             }
+            Expr::Receive(_) => todo!("Transpilation for 'receive' expr not yet implemented"),
         }
     }
 

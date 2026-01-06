@@ -30,7 +30,43 @@ Pyro uses `Arc` (Atomic Reference Counting) and `RwLock` (Read-Write Lock) inter
 - **Immutable Data** (e.g., `List`, `Dict` default): Safe to read from multiple threads.
 - **Mutable Data** (e.g., `list_mut`, `dict_mut`, `Instance` fields): Protected by implicit locks.
 
-**Note:** While Pyro ensures memory safety (no segfaults), it does not currently provide explicit synchronization primitives (like Mutexes or Channels) to the user. You must be careful to avoid race conditions in your logic when mutating shared state.
+## Channels
+
+Pyro provides channels for synchronization and communication between threads, similar to Go.
+
+### Creating a Channel
+
+Use the `chan(capacity)` built-in function to create a channel.
+
+```python
+let c = chan(1) // Buffered channel with capacity 1
+```
+
+### Sending and Receiving
+
+Use the `<-` operator to send and receive values.
+
+-   **Send**: `channel <- value` (Statement)
+-   **Receive**: `val = <- channel` (Expression)
+
+```python
+import std.time
+
+def worker(c):
+    std.time.sleep(1.0)
+    print("Worker sending")
+    c <- "Done"
+
+let c = chan(1)
+go worker(c)
+
+print("Waiting...")
+let msg = <- c
+print("Received: " + msg)
+```
+
+Channels are safe to share across threads. Sending to a full channel blocks the sender (suspends the task), and receiving from an empty channel blocks the receiver.
+
 
 ## Configuration
 

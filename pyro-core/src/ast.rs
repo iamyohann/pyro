@@ -59,6 +59,7 @@ pub enum Expr {
     Tuple(Vec<Expr>),
     Set(Vec<Expr>),
     Dict(Vec<(Expr, Expr)>),
+    Receive(Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,6 +137,10 @@ pub enum Stmt {
         cause: Option<Expr>,
     },
     Go(Box<Expr>),
+    Send {
+        channel: Expr,
+        value: Expr,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

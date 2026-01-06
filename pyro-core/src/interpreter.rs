@@ -2,6 +2,7 @@ use crate::ast::{BinaryOp, Expr, Stmt, Type};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio;
+use async_channel;
 
 #[derive(Clone)]
 pub struct NativeClosure(pub Arc<dyn Fn(Vec<Value>) -> Result<Value, Value> + Send + Sync>);
@@ -80,6 +81,8 @@ pub enum Value {
         func: NativeClosure,
     },
     NativeModule(Arc<HashMap<String, Value>>),
+    
+    Channel(Arc<(async_channel::Sender<Value>, async_channel::Receiver<Value>)>),
 
     Void,
 }
@@ -140,6 +143,7 @@ impl PartialEq for Value {
              },
              
              (Value::Void, Value::Void) => true,
+             (Value::Channel(c1), Value::Channel(c2)) => Arc::ptr_eq(c1, c2),
              
              _ => false,
         }
@@ -313,6 +317,20 @@ impl Interpreter {
                          eprintln!("Error in go routine: {:?}", e);
                      }
                 });
+            }
+            Stmt::Send { channel, value } => {
+                let chan_val = self.evaluate(channel)?;
+                let send_val = self.evaluate(value)?;
+                match chan_val {
+                    Value::Channel(chan) => {
+                        let tx = &chan.0;
+                         match tokio::task::block_in_place(|| tx.send_blocking(send_val)) {
+                             Ok(_) => {},
+                             Err(_) => return Err(self.make_error("Channel closed")),
+                         }
+                    },
+                    _ => return Err(self.make_error("Send expects a channel")),
+                }
             }
             Stmt::VarDecl { name, value, .. } => {
                 let val = self.evaluate(value)?;
@@ -495,6 +513,8 @@ impl Interpreter {
             Expr::Identifier(name) => {
                 if name == "print" 
                    || name == "range"
+                   || name == "chan"
+                   || name == "str"
                    || name == "ListMutable" 
                    || name == "TupleMutable" 
                    || name == "SetMutable" 
@@ -675,6 +695,19 @@ impl Interpreter {
                 return self.apply(func_val, evaluated_args);
 
 
+            }
+            Expr::Receive(expr) => {
+                let val = self.evaluate(*expr)?;
+                match val {
+                    Value::Channel(chan) => {
+                         let rx = &chan.1;
+                         match tokio::task::block_in_place(|| rx.recv_blocking()) {
+                             Ok(v) => Ok(v),
+                             Err(_) => Err(self.make_error("Channel closed")),
+                         }
+                    }
+                    _ => Err(self.make_error("Receive expects a channel")),
+                }
             }
         }
     }
@@ -1014,7 +1047,16 @@ impl Interpreter {
                         if step > 0 { while current < end { vals.push(Value::Int(current)); current += step; } }
                         else { while current > end { vals.push(Value::Int(current)); current += step; } }
                         Ok(Value::List(Arc::new(vals)))
-                 } else if name == "ListMutable" {
+                  } else if name == "str" {
+                      if args.len() != 1 { return Err(self.make_error("str takes 1 arg")); }
+                      match &args[0] {
+                          Value::String(s) => Ok(Value::String(s.clone())),
+                          Value::Int(i) => Ok(Value::String(Arc::new(i.to_string()))),
+                          Value::Float(f) => Ok(Value::String(Arc::new(f.to_string()))),
+                          Value::Bool(b) => Ok(Value::String(Arc::new(b.to_string()))),
+                          _ => Ok(Value::String(Arc::new(format!("{:?}", args[0])))),
+                      }
+                  } else if name == "ListMutable" {
                      if args.len() != 1 { return Err(self.make_error("ListMutable takes 1 arg")); }
                      match &args[0] { Value::List(l) => Ok(Value::ListMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects List")) }
                  } else if name == "TupleMutable" {
@@ -1024,9 +1066,17 @@ impl Interpreter {
                      if args.len() != 1 { return Err(self.make_error("SetMutable takes 1 arg")); }
                      match &args[0] { Value::Set(l) => Ok(Value::SetMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects Set")) }
                  } else if name == "DictMutable" {
-                     if args.len() != 1 { return Err(self.make_error("DictMutable takes 1 arg")); }
-                     match &args[0] { Value::Dict(l) => Ok(Value::DictMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects Dict")) }
-                 } else {
+                      if args.len() != 1 { return Err(self.make_error("DictMutable takes 1 arg")); }
+                      match &args[0] { Value::Dict(l) => Ok(Value::DictMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects Dict")) }
+                  } else if name == "chan" {
+                     let capacity = if args.len() == 1 {
+                         match args[0] { Value::Int(i) => i as usize, _ => 1 } 
+                     } else { 1 };
+                     // async-channel requires capacity >= 1
+                     let cap = if capacity < 1 { 1 } else { capacity };
+                     let (tx, rx) = async_channel::bounded(cap);
+                     Ok(Value::Channel(Arc::new((tx, rx))))
+                  } else {
                      Err(self.make_error(&format!("Unknown builtin function: {}", name)))
                  }
             }

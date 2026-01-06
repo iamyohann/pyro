@@ -59,6 +59,7 @@ pub enum Token {
     RBracket,    // ]
     LBrace,      // {
     RBrace,      // }
+    ArrowLeft,   // <-
 
     // Significant Whitespace
     Indent,
@@ -139,6 +140,10 @@ impl<'a> Lexer<'a> {
                     if let Some(&'=') = self.input.peek() {
                         self.input.next();
                         tokens.push(Token::LessEqual);
+                    } else if let Some(&'-') = self.input.peek() {
+                        // Check for ArrowLeft <-
+                        self.input.next();
+                        tokens.push(Token::ArrowLeft);
                     } else {
                         tokens.push(Token::Less);
                     }

@@ -1,0 +1,22 @@
+import std.time
+
+def worker(c):
+    print("Worker running")
+    time.sleep(0.5)
+    print("Worker sending 100")
+    c <- 100
+    print("Worker sent")
+
+print("Main starting")
+let c = chan(1)
+
+go worker(c)
+
+print("Main waiting for receive")
+let val = <- c
+print("Main received: " + str(val))
+
+if val == 100:
+    print("Channel test passed")
+else:
+    print("Channel test failed")
