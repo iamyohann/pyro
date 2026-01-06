@@ -66,4 +66,26 @@ See [docs/tutorial.md](docs/tutorial.md).
 - **Memory**: Automatic memory management (ARC) for ease of use.
 - **Tooling**: Built-in package manager (Git-based semantics).
 - **Native Bindings**: Easily bind C/Rust libraries.
-- **Rust Integration**: Import and use Rust crates directly. [Learn more](docs/rust_integration.md).
+- **Rust Integration**: Import and use Rust crates directly.
+
+## Rust Integration
+
+Pyro allows you to use Rust crates directly in your Pyro code.
+
+**pyro.mod**
+```toml
+[rust]
+rand = "0.8"
+base64 = "0.21"
+```
+
+**main.pyro**
+```python
+extern "rand::random" def rand_float() -> float
+extern "base64::encode" def b64_encode(input: string) -> string
+
+print(rand_float())
+print(b64_encode("Pyro is awesome"))
+```
+
+For more details, see [docs/rust_integration.md](docs/rust_integration.md).
