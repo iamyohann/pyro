@@ -138,6 +138,12 @@ pub enum Stmt {
         cause: Option<Expr>,
     },
     Go(Box<Expr>),
+    Extern {
+        func_name: String,
+        generics: Vec<String>,
+        params: Vec<(String, Type)>,
+        return_type: Type,
+    },
 
 }
 

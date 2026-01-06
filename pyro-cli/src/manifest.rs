@@ -9,6 +9,14 @@ pub struct Manifest {
     pub package: Package,
     #[serde(default)]
     pub dependencies: HashMap<String, String>, 
+    #[serde(default)]
+    pub rust: Option<RustConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RustConfig {
+    #[serde(default)]
+    pub dependencies: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -41,6 +49,7 @@ impl Manifest {
                 version: "0.1.0".to_string(),
             },
             dependencies: HashMap::new(),
+            rust: None,
         }
     }
 

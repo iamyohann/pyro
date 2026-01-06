@@ -30,6 +30,7 @@ pub enum Token {
     From,
     Go,
     Chan,
+    Extern,
 
     // Identifiers and Literals
     Identifier(String),
@@ -287,6 +288,7 @@ impl<'a> Lexer<'a> {
             "from" => Token::From,
             "go" => Token::Go,
             "chan" => Token::Chan,
+            "extern" => Token::Extern,
             "true" => Token::Bool(true),
             "false" => Token::Bool(false),
             _ => Token::Identifier(ident),

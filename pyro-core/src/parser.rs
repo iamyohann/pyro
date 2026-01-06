@@ -61,6 +61,7 @@ impl<'a> Parser<'a> {
             Some(Token::Try) => self.parse_try(),
             Some(Token::Raise) => self.parse_raise(),
             Some(Token::Go) => self.parse_go(),
+            Some(Token::Extern) => self.parse_extern(),
             _ => {
                 let expr = self.parse_expression()?;
                 
@@ -1124,5 +1125,64 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Stmt::Go(Box::new(expr)))
+    }
+
+    fn parse_extern(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume extern
+        
+        if let Some(Token::Def) = self.tokens.next() {} else {
+             return Err("Expected 'def' after 'extern'".to_string());
+        }
+
+        let name = match self.tokens.next() {
+            Some(Token::Identifier(s)) => s.clone(),
+            _ => return Err("Expected external function name".to_string()),
+        };
+
+        let generics = self.parse_generic_params()?;
+
+        if let Some(Token::LParen) = self.tokens.next() {} else {
+             return Err("Expected '('".to_string());
+        }
+        
+        let mut params = Vec::new();
+        if let Some(Token::RParen) = self.tokens.peek() {
+            self.tokens.next();
+        } else {
+            loop {
+                let param_name = match self.tokens.next() {
+                    Some(Token::Identifier(s)) => s.clone(),
+                    _ => return Err("Expected parameter name".to_string()),
+                };
+
+                if let Some(Token::Colon) = self.tokens.next() {} else {
+                     return Err("Expected ':' for parameter type".to_string());
+                }
+                let param_type = self.parse_type()?;
+                
+                params.push((param_name, param_type));
+
+                match self.tokens.peek() {
+                    Some(Token::Comma) => { self.tokens.next(); }
+                    Some(Token::RParen) => { self.tokens.next(); break; }
+                    _ => return Err("Expected ',' or ')'".to_string()),
+                }
+            }
+        }
+
+        let mut return_type = Type::Void;
+        if let Some(Token::Arrow) = self.tokens.peek() {
+            self.tokens.next();
+            return_type = self.parse_type()?;
+        }
+        
+        let _ = self.tokens.next_if(|t| matches!(t, Token::Newline));
+
+        Ok(Stmt::Extern {
+            func_name: name,
+            generics,
+            params,
+            return_type,
+        })
     }
 }

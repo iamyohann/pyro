@@ -54,4 +54,5 @@ See [docs/tutorial.md](docs/tutorial.md).
 - **Concurrency**: Go-style concurrency with `go` routines.
 - **Memory**: Automatic memory management (ARC) for ease of use.
 - **Tooling**: Built-in package manager (Git-based semantics).
-- **Native Modules**: Extend Pyro with Rust.
+- **Native Bindings**: Easily bind C/Rust libraries.
+- **Rust Integration**: Import and use Rust crates directly. [Learn more](docs/rust_integration.md).

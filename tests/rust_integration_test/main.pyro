@@ -1,0 +1,13 @@
+extern def rand_float() -> float
+
+print("Testing Rust Integration...")
+let x = rand_float()
+print("Random Number: " + str(x))
+
+if x >= 0.0:
+    if x <= 1.0:
+        print("SUCCESS: Random number in range [0, 1]")
+    else:
+        print("FAILURE: Random number > 1.0")
+else:
+    print("FAILURE: Random number < 0.0")

@@ -32,6 +32,10 @@ impl Transpiler {
     fn transpile_stmt(&mut self, stmt: Stmt, indent: usize) {
         self.push_indent(indent);
         match stmt {
+            Stmt::Extern { .. } => {
+                // Transpiler needs to handle extern?
+                // For now, ignore or emit comment.
+            }
             Stmt::VarDecl { name, typ, value, mutable: _ } => {
                 self.output.push_str(&format!("let mut usr_{} = ", name));
                 self.transpile_expr(value);

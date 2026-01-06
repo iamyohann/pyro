@@ -85,17 +85,7 @@ async fn async_main() -> Result<()> {
 
     match &cli.command {
         Commands::Run { file } => {
-            let mut statements = Vec::new();
-            let mut loaded = HashSet::new();
-            
-            util::process_file(file.clone(), &mut loaded, &mut statements)?;
-
-            // 3. Interpret
-            let mut interpreter = Interpreter::new();
-            match interpreter.run(statements) {
-                Ok(_) => {}, 
-                Err(e) => return Err(anyhow::anyhow!("Runtime error: {:?}", e)),
-            }
+            cmd::run::r#impl(file.clone())?;
         }
         Commands::Mod { command } => {
             match command {

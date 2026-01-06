@@ -220,6 +220,15 @@ impl Interpreter {
         self.native_modules.insert(name.to_string(), module);
     }
 
+    pub fn register_native_function<F>(&mut self, name: &str, func: F)
+    where F: Fn(Vec<Value>) -> Result<Value, Value> + Send + Sync + 'static 
+    {
+        self.globals.insert(name.to_string(), Value::NativeFunction {
+            name: name.to_string(),
+            func: NativeClosure(Arc::new(func)),
+        });
+    }
+
     pub fn has_native_module(&self, name: &str) -> bool {
         self.native_modules.contains_key(name)
     }
@@ -345,6 +354,7 @@ impl Interpreter {
             }
             Stmt::Break => return Ok(Flow::Break),
             Stmt::Continue => return Ok(Flow::Continue),
+            Stmt::Extern { .. } => {},
             Stmt::If { cond, then_block, else_block } => {
                 let cond_val = self.evaluate(cond)?;
                 let truthy = match cond_val {
