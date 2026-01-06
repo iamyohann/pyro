@@ -93,4 +93,61 @@ The size of the thread pool can be configured via the `PYRO_WORKER_THREADS` envi
 PYRO_WORKER_THREADS=4 cargo run -p pyro-cli -- run script.pyro
 ```
 
-If not specified, it defaults to the number of logical CPUs on your machine.
+
+## Concurrency Patterns
+
+### Orchestrator and Worker
+
+Common pattern where a main thread (orchestrator) sends jobs to a queue, and multiple worker threads process them.
+
+```python
+import std.time
+
+def worker(id: int, jobs: Receiver<int>, results: Sender<int>):
+    while true:
+        let job = jobs.collect()
+        if job == -1: # Termination signal
+            break
+        
+        # Process job
+        std.time.sleep(0.1)
+        results.push(job * 2)
+
+let jobs = chan<int>(10)
+let results = chan<int>(10)
+
+# Start workers
+go worker(1, jobs.receiver(), results.sender())
+go worker(2, jobs.receiver(), results.sender())
+
+# Send jobs
+for i in 0..5:
+    jobs.push(i)
+
+# Terminate workers
+jobs.push(-1)
+jobs.push(-1)
+
+# Collect results
+for i in 0..5:
+    print(results.collect())
+```
+
+### Fan-In
+
+Multiple producers sending data to a single channel.
+
+```python
+def producer(id: int, out: Sender<string>):
+    out.push("Producer " + str(id))
+
+let c = chan<string>(10)
+let tx = c.sender()
+
+go producer(1, tx)
+go producer(2, tx)
+go producer(3, tx)
+
+for i in 0..3:
+    print(c.collect())
+```

@@ -286,6 +286,8 @@ impl<'a> Lexer<'a> {
             "from" => Token::From,
             "go" => Token::Go,
             "chan" => Token::Chan,
+            "true" => Token::Bool(true),
+            "false" => Token::Bool(false),
             _ => Token::Identifier(ident),
         }
     }

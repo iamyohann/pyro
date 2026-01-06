@@ -385,6 +385,11 @@ impl<'a> Parser<'a> {
                 self.tokens.next();
                 Ok(Expr::Identifier(name))
             }
+            Some(Token::Bool(b)) => {
+                let val = *b;
+                self.tokens.next();
+                Ok(Expr::LiteralBool(val))
+            }
             Some(Token::Chan) => {
                 self.tokens.next(); // consume chan
                 

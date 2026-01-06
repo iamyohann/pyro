@@ -1,0 +1,64 @@
+import std.time
+
+# --- Orchestrator & Worker ---
+
+def worker(id: int, jobs: Receiver<int>, results: Sender<int>):
+    print("Worker " + str(id) + " started")
+    while true:
+        let job = jobs.collect()
+        # In a real scenario we'd check for close/empty, but for now assuming valid flow
+        # Wait, if channel closes collect() might return something else or error?
+        # Current impl panics or returns? Implementation returns Err if closed.
+        # But we don't have exception handling for it in user code yet perfectly exposed?
+        # Let's rely on a sentinel value for now or just run fixed number of jobs.
+        if job == -1:
+            break
+            
+        print("Worker " + str(id) + " processing job " + str(job))
+        std.time.sleep(0.1)
+        results.push(job * 2)
+    print("Worker " + str(id) + " done")
+
+print("--- Orchestrator Pattern ---")
+let jobs = chan<int>(5)
+let results = chan<int>(5)
+
+# Start 3 workers
+go worker(1, jobs.receiver(), results.sender())
+go worker(2, jobs.receiver(), results.sender())
+go worker(3, jobs.receiver(), results.sender())
+
+# Send 5 jobs
+for i in range(0, 5):
+    jobs.push(i)
+
+# Send close signals
+for i in range(0, 3):
+    jobs.push(-1)
+
+# Collect results
+for i in range(0, 5):
+    let res = results.collect()
+    print("Result: " + str(res))
+
+print("Orchestrator pattern finished")
+
+
+# --- Fan In ---
+
+def producer(id: int, out: Sender<string>):
+    for i in range(0, 3):
+        std.time.sleep(0.1) 
+        out.push("Producer " + str(id) + ": " + str(i))
+
+print("\n--- Fan In Pattern ---")
+let c_out = chan<string>(10)
+let tx = c_out.sender()
+
+go producer(1, tx)
+go producer(2, tx)
+
+for i in range(0, 6):
+    print(c_out.collect())
+
+print("Fan In finished")
