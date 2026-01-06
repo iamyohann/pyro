@@ -218,6 +218,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.tokens.next();
+            while let Some(Token::Newline) = self.tokens.peek() { self.tokens.next(); }
             let right = self.parse_comparison()?;
             left = Expr::Binary {
                 left: Box::new(left),
@@ -240,6 +241,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.tokens.next();
+            while let Some(Token::Newline) = self.tokens.peek() { self.tokens.next(); }
             let right = self.parse_term()?;
             left = Expr::Binary {
                 left: Box::new(left),
@@ -260,6 +262,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.tokens.next();
+            while let Some(Token::Newline) = self.tokens.peek() { self.tokens.next(); }
             let right = self.parse_factor()?;
             left = Expr::Binary {
                 left: Box::new(left),
@@ -280,6 +283,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.tokens.next();
+            while let Some(Token::Newline) = self.tokens.peek() { self.tokens.next(); }
             let right = self.parse_unary()?;
             left = Expr::Binary {
                 left: Box::new(left),
@@ -305,20 +309,18 @@ impl<'a> Parser<'a> {
                     self.tokens.next();
                 } else {
                     loop {
+                        while let Some(Token::Newline) = self.tokens.peek() { self.tokens.next(); }
                         let arg = self.parse_expression()?;
                         args.push(arg);
                         // println!("Parsed arg: {:?}, Next token: {:?}", args.last(), self.tokens.peek());
                         match self.tokens.peek() {
                             Some(Token::Comma) => { 
                                 self.tokens.next(); 
+                                while let Some(Token::Newline) = self.tokens.peek() { self.tokens.next(); }
                                 if let Some(Token::RParen) = self.tokens.peek() {
                                     self.tokens.next();
                                     break;
                                 }
-                            }
-                            Some(Token::RParen) => {
-                                self.tokens.next();
-                                break;
                             }
                             Some(Token::RParen) => {
                                 self.tokens.next();

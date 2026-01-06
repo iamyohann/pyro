@@ -265,7 +265,7 @@ impl Interpreter {
                     // Exception occurred
                     if let Some(catch_block) = catch_body {
                          // Enter implicit scope (simplified for now)
-                         let mut old_globals = self.globals.clone(); // inefficient but works for now as scope push
+                         let old_globals = self.globals.clone(); // inefficient but works for now as scope push
                          
                          if let Some(var_name) = catch_var {
                              self.globals.insert(var_name, e);
@@ -308,7 +308,7 @@ impl Interpreter {
 
                 return flow_result;
             }
-            Stmt::Raise { error, cause } => {
+            Stmt::Raise { error, cause: _ } => {
                 let err_val = self.evaluate(error)?;
                 // Ignoring cause for now or wrap it
                 return Err(err_val);
@@ -1053,7 +1053,7 @@ impl Interpreter {
             }
             Value::BoundMethod { object, method } => {
                 let call_args = args;
-                if let Value::Function { generics: ref generics, params: ref params, body: ref body, partial_args: ref partial_args } = *method {
+                if let Value::Function { ref generics, ref params, ref body, ref partial_args } = *method {
                      if partial_args.is_empty() && !params.is_empty() {
                          let mut new_partial = vec![*object.clone()];
                          new_partial.extend(partial_args.clone()); 

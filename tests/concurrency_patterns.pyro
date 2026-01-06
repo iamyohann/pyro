@@ -15,7 +15,7 @@ def worker(id: int, jobs: Receiver<int>, results: Sender<int>):
             break
             
         print("Worker " + str(id) + " processing job " + str(job))
-        std.time.sleep(0.1)
+        time.sleep(0.1)
         results.push(job * 2)
     print("Worker " + str(id) + " done")
 
@@ -48,7 +48,7 @@ print("Orchestrator pattern finished")
 
 def producer(id: int, out: Sender<string>):
     for i in range(0, 3):
-        std.time.sleep(0.1) 
+        time.sleep(0.1) 
         out.push("Producer " + str(id) + ": " + str(i))
 
 print("\n--- Fan In Pattern ---")
