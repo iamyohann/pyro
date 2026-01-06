@@ -35,11 +35,13 @@ See [docs/tutorial.md](docs/tutorial.md).
 - [Error Handling](docs/error_handling.md)
 - [Native Bindings](docs/native_bindings.md)
 - [Standard Library](docs/stdlib.md)
+- [Threading & Concurrency](docs/threading.md)
 
 ## Features
 - **Syntax**: Python-like (indentation-based).
 - **Type System**: Strong, static typing with inference (Rust-inspired).
 - **Functional**: Automatic currying, partial application, and immutable data structures.
-- **Memory**: Automatic memory management (ARC/GC) for ease of use.
+- **Concurrency**: Go-style concurrency with `go` routines.
+- **Memory**: Automatic memory management (ARC) for ease of use.
 - **Tooling**: Built-in package manager (Git-based semantics).
 - **Native Modules**: Extend Pyro with Rust.

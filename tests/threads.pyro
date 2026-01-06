@@ -1,0 +1,20 @@
+import std.time
+
+def worker(id: int):
+    if id == 1:
+        print("Worker 1 starting")
+    else:
+        print("Worker 2 starting")
+
+    time.sleep(0.5)
+    
+    if id == 1:
+        print("Worker 1 done")
+    else:
+        print("Worker 2 done")
+
+print("Main starting")
+go worker(1)
+go worker(2)
+time.sleep(1.0)
+print("Main done")

@@ -117,7 +117,12 @@ impl Transpiler {
                 self.output.push_str(";\n");
             }
             Stmt::Import(_) => {
-                 self.output.push_str("// import resolved \n");
+                // Ignore imports for now in transpiler or handle same as others
+            }
+            Stmt::Go(_) => {
+                // Transpiling 'go' requires support in target language (Rust)
+                // For now, todo!()
+                todo!("Transpilation for 'go' keyword not yet implemented");
             }
             Stmt::For { item_name, iterable, body } => {
                 self.push_indent(indent);

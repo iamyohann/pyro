@@ -1,0 +1,41 @@
+import std.time
+
+let shared_list = [0]
+# Use a mutable list (well, list literals are immutable by default in Pyro unless we have list_mut?)
+# Current Pyro impl: [1, 2] is immutable List.
+# We need ListMutable. How to create?
+# The parser interprets `[ ... ]` as `Expr::List` which evaluates to `Value::List` (immutable).
+# We might need a builtin or syntax for mutable list if not present.
+# Checking parser... `Expr::List` -> `Value::List`.
+# Is there a `list()` constructor? Or `[ ... ]` acts as mutable?
+# In `interpreter.rs`: `Expr::List` -> `Value::List(Arc::new(vec))`. It's immutable.
+# Wait, previous user turns implemented `ListMutable`.
+# Let's check `stdlib/mod.rs` or `interpreter.rs` for how to instantiate it or if `list()` helper exists.
+# If not, I can't easily test concurrent mutation of a list.
+
+# Let's use `Instance` fields which use RwLock.
+class Counter:
+    def __init__(self):
+        self.count = 0
+
+    def increment(self):
+        # Read - Modify - Write (Race condition likely without Lock, but memory safe)
+        # But we want to test that it doesn't crash.
+        let c = self.count
+        # time.sleep(0.01) # Force race
+        self.count = c + 1
+
+let counter = Counter()
+
+def run_increment(id: int):
+    # print("Thread " + str(id) + " running")
+    counter.increment()
+
+# Spawn many
+for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]:
+    go run_increment(i)
+
+time.sleep(1.0)
+print("Final count (might be less than 10 due to logic race):")
+print(counter.count)
+print("Finished without crashing")

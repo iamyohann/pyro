@@ -1,5 +1,5 @@
 use crate::interpreter::Value;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub trait FromPyroValue: Sized {
     fn from_value(v: &Value) -> Result<Self, String>;
@@ -66,7 +66,7 @@ impl FromPyroValue for String {
 
 impl ToPyroValue for String {
     fn to_value(self) -> Value {
-        Value::String(Rc::new(self))
+        Value::String(Arc::new(self))
     }
 }
 
@@ -83,7 +83,7 @@ impl<T: FromPyroValue> FromPyroValue for Vec<T> {
             }
             Value::ListMutable(l) => {
                 let mut result = Vec::new();
-                for item in l.borrow().iter() {
+                for item in l.read().unwrap().iter() {
                     result.push(T::from_value(item)?);
                 }
                 Ok(result)
@@ -99,7 +99,7 @@ impl<T: ToPyroValue> ToPyroValue for Vec<T> {
         for item in self {
             result.push(item.to_value());
         }
-        Value::List(Rc::new(result))
+        Value::List(Arc::new(result))
     }
 }
 

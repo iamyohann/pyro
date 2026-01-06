@@ -66,6 +66,21 @@ enum ModCommands {
 }
 
 fn main() -> Result<()> {
+    let worker_threads = std::env::var("PYRO_WORKER_THREADS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| num_cpus::get());
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()
+        .context("Failed to build tokio runtime")?;
+
+    runtime.block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
@@ -78,7 +93,7 @@ fn main() -> Result<()> {
             // 3. Interpret
             let mut interpreter = Interpreter::new();
             match interpreter.run(statements) {
-                Ok(_) => {}, // Flow::None or internal Flow handling (shouldn't leak usually except Return/None)
+                Ok(_) => {}, 
                 Err(e) => return Err(anyhow::anyhow!("Runtime error: {:?}", e)),
             }
         }

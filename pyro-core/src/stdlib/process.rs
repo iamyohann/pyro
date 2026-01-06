@@ -1,7 +1,7 @@
 use crate::interpreter::{Value, NativeClosure};
 use crate::convert::{FromPyroValue};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::process::{Command, Stdio};
 
 fn exit(args: Vec<Value>) -> Result<Value, Value> {
@@ -18,11 +18,11 @@ fn exit(args: Vec<Value>) -> Result<Value, Value> {
 
 fn exec(args: Vec<Value>) -> Result<Value, Value> {
     if args.len() < 1 {
-        return Err(Value::String(Rc::new("Expected at least 1 argument (command)".to_string())));
+        return Err(Value::String(Arc::new("Expected at least 1 argument (command)".to_string())));
     }
     
     let cmd_str: String = FromPyroValue::from_value(&args[0])
-        .map_err(|e| Value::String(Rc::new(e)))?;
+        .map_err(|e| Value::String(Arc::new(e)))?;
         
     let cmd_args: Vec<String> = if args.len() > 1 {
         FromPyroValue::from_value(&args[1]).unwrap_or_else(|_| Vec::new())
@@ -35,23 +35,23 @@ fn exec(args: Vec<Value>) -> Result<Value, Value> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|e| Value::String(Rc::new(e.to_string())))?;
+        .map_err(|e| Value::String(Arc::new(e.to_string())))?;
         
     let mut result_map = Vec::new();
     result_map.push((
-        Value::String(Rc::new("stdout".to_string())),
-        Value::String(Rc::new(String::from_utf8_lossy(&output.stdout).to_string()))
+        Value::String(Arc::new("stdout".to_string())),
+        Value::String(Arc::new(String::from_utf8_lossy(&output.stdout).to_string()))
     ));
     result_map.push((
-        Value::String(Rc::new("stderr".to_string())),
-        Value::String(Rc::new(String::from_utf8_lossy(&output.stderr).to_string()))
+        Value::String(Arc::new("stderr".to_string())),
+        Value::String(Arc::new(String::from_utf8_lossy(&output.stderr).to_string()))
     ));
     result_map.push((
-        Value::String(Rc::new("code".to_string())),
+        Value::String(Arc::new("code".to_string())),
         Value::Int(output.status.code().unwrap_or(-1) as i64)
     ));
     
-    Ok(Value::Dict(Rc::new(result_map)))
+    Ok(Value::Dict(Arc::new(result_map)))
 }
 
 pub fn module() -> Value {
@@ -59,12 +59,12 @@ pub fn module() -> Value {
     
     methods.insert("exit".to_string(), Value::NativeFunction {
         name: "exit".to_string(),
-        func: NativeClosure(Rc::new(exit)),
+        func: NativeClosure(Arc::new(exit)),
     });
     methods.insert("exec".to_string(), Value::NativeFunction {
         name: "exec".to_string(),
-        func: NativeClosure(Rc::new(exec)),
+        func: NativeClosure(Arc::new(exec)),
     });
 
-    Value::NativeModule(Rc::new(methods))
+    Value::NativeModule(Arc::new(methods))
 }

@@ -1,10 +1,10 @@
 use crate::ast::{BinaryOp, Expr, Stmt, Type};
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
+use tokio;
 
 #[derive(Clone)]
-pub struct NativeClosure(pub Rc<dyn Fn(Vec<Value>) -> Result<Value, Value>>);
+pub struct NativeClosure(pub Arc<dyn Fn(Vec<Value>) -> Result<Value, Value> + Send + Sync>);
 
 impl std::fmt::Debug for NativeClosure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -14,37 +14,37 @@ impl std::fmt::Debug for NativeClosure {
 
 impl PartialEq for NativeClosure {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
     Float(f64),
     Bool(bool),
-    // Managed by RC
-    String(Rc<String>), 
+    // Managed by Arc
+    String(Arc<String>), 
     Function {
         generics: Vec<String>,
         params: Vec<(String, Type)>,
-        body: Rc<Vec<Stmt>>,
+        body: Arc<Vec<Stmt>>,
         partial_args: Vec<Value>, // For currying
     },
-    List(Rc<Vec<Value>>), // Immutable
-    Tuple(Rc<Vec<Value>>),
-    Set(Rc<Vec<Value>>),
-    Dict(Rc<Vec<(Value, Value)>>),
+    List(Arc<Vec<Value>>), // Immutable
+    Tuple(Arc<Vec<Value>>),
+    Set(Arc<Vec<Value>>),
+    Dict(Arc<Vec<(Value, Value)>>),
     
     Class {
         name: String,
         parent: Option<String>,
-        methods: Rc<HashMap<String, Value>>, // methods are Function values
+        methods: Arc<HashMap<String, Value>>, // methods are Function values
     },
     Instance {
         class_name: String,
-        fields: Rc<RefCell<HashMap<String, Value>>>,
-        methods: Rc<HashMap<String, Value>>, // shared from Class
+        fields: Arc<RwLock<HashMap<String, Value>>>,
+        methods: Arc<HashMap<String, Value>>, // shared from Class
     },
     BoundMethod {
         object: Box<Value>, // Instance
@@ -53,22 +53,22 @@ pub enum Value {
     // Records
     Record {
         name: String,
-        fields: Rc<Vec<String>>, 
-        values: Rc<Vec<Value>>,
-        methods: Rc<HashMap<String, Value>>,
+        fields: Arc<Vec<String>>, 
+        values: Arc<Vec<Value>>,
+        methods: Arc<HashMap<String, Value>>,
     },
     RecordConstructor {
         name: String,
         fields: Vec<String>, // Field names
-        methods: Rc<HashMap<String, Value>>,
+        methods: Arc<HashMap<String, Value>>,
         partial_args: Vec<Value>, // For currying
     },
 
     // Mutable
-    ListMutable(Rc<RefCell<Vec<Value>>>),
-    TupleMutable(Rc<RefCell<Vec<Value>>>),
-    SetMutable(Rc<RefCell<Vec<Value>>>),
-    DictMutable(Rc<RefCell<Vec<(Value, Value)>>>),
+    ListMutable(Arc<RwLock<Vec<Value>>>),
+    TupleMutable(Arc<RwLock<Vec<Value>>>),
+    SetMutable(Arc<RwLock<Vec<Value>>>),
+    DictMutable(Arc<RwLock<Vec<(Value, Value)>>>),
     
     BuiltinMethod {
         object: Box<Value>,
@@ -79,9 +79,71 @@ pub enum Value {
         name: String,
         func: NativeClosure,
     },
-    NativeModule(Rc<HashMap<String, Value>>),
+    NativeModule(Arc<HashMap<String, Value>>),
 
     Void,
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Function { .. }, Value::Function { .. }) => false, // Functions not equitable
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (Value::Set(a), Value::Set(b)) => a == b,
+            (Value::Dict(a), Value::Dict(b)) => a == b, // Arc<Vec> equality
+            
+            (Value::Class { name: n1, .. }, Value::Class { name: n2, .. }) => n1 == n2,
+            
+            (Value::Instance { fields: f1, .. }, Value::Instance { fields: f2, .. }) => {
+                 if Arc::ptr_eq(f1, f2) { return true; }
+                 
+                 let map1 = f1.read().unwrap();
+                 let map2 = f2.read().unwrap();
+                 if map1.len() != map2.len() { return false; }
+                 for (k, v) in map1.iter() {
+                     match map2.get(k) {
+                         Some(v2) => if v != v2 { return false; },
+                         None => return false,
+                     }
+                 }
+                 true
+             },
+             
+             (Value::ListMutable(l1), Value::ListMutable(l2)) => {
+                 if Arc::ptr_eq(l1, l2) { return true; }
+                 let v1 = l1.read().unwrap();
+                 let v2 = l2.read().unwrap();
+                 *v1 == *v2
+             },
+             (Value::TupleMutable(l1), Value::TupleMutable(l2)) => {
+                 if Arc::ptr_eq(l1, l2) { return true; }
+                 let v1 = l1.read().unwrap();
+                 let v2 = l2.read().unwrap();
+                 *v1 == *v2
+             },
+             (Value::SetMutable(l1), Value::SetMutable(l2)) => {
+                 if Arc::ptr_eq(l1, l2) { return true; }
+                 let v1 = l1.read().unwrap();
+                 let v2 = l2.read().unwrap();
+                 *v1 == *v2
+             },
+             (Value::DictMutable(l1), Value::DictMutable(l2)) => {
+                 if Arc::ptr_eq(l1, l2) { return true; }
+                 let v1 = l1.read().unwrap();
+                 let v2 = l2.read().unwrap();
+                 *v1 == *v2
+             },
+             
+             (Value::Void, Value::Void) => true,
+             
+             _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +154,7 @@ pub enum Flow {
     None,
 }
 
+#[derive(Clone)]
 pub struct Interpreter {
     // Nested scopes: push hashmap on entry, pop on exit
     // optimizing to single scope for now for simplicity
@@ -118,7 +181,7 @@ impl Interpreter {
         let init_func = Value::Function {
             generics: Vec::new(),
             params: vec![("self".to_string(), Type::Void), ("message".to_string(), Type::String)],
-            body: Rc::new(init_body),
+            body: Arc::new(init_body),
             partial_args: Vec::new(),
         };
 
@@ -128,7 +191,7 @@ impl Interpreter {
         globals.insert("Error".to_string(), Value::Class {
             name: "Error".to_string(),
             parent: None,
-            methods: Rc::new(error_methods),
+            methods: Arc::new(error_methods),
         });
 
         let mut interpreter = Self {
@@ -150,17 +213,17 @@ impl Interpreter {
     fn make_error(&self, msg: &str) -> Value {
         // Construct an instance of Error
         let mut fields = HashMap::new();
-        fields.insert("message".to_string(), Value::String(Rc::new(msg.to_string())));
+        fields.insert("message".to_string(), Value::String(Arc::new(msg.to_string())));
         
         let methods = if let Some(Value::Class { methods, .. }) = self.globals.get("Error") {
             methods.clone()
         } else {
-             Rc::new(HashMap::new())
+             Arc::new(HashMap::new())
         };
 
         Value::Instance {
             class_name: "Error".to_string(),
-            fields: Rc::new(RefCell::new(fields)),
+            fields: Arc::new(RwLock::new(fields)),
             methods,
         }
     }
@@ -232,14 +295,24 @@ impl Interpreter {
                 return flow_result;
             }
             Stmt::Raise { error, cause } => {
-                let val = self.evaluate(error)?;
-                if let Some(cause_expr) = cause {
-                    let cause_val = self.evaluate(cause_expr)?;
-                    if let Value::Instance { fields, .. } = &val {
-                         fields.borrow_mut().insert("cause".to_string(), cause_val);
-                    }
-                }
-                return Err(val);
+                let err_val = self.evaluate(error)?;
+                // Ignoring cause for now or wrap it
+                return Err(err_val);
+            }
+            Stmt::Go(expr) => {
+                // We need to clone the interpreter to move it into the thread
+                // Since everything is Arc<RwLock>, this is a shallow clone of references
+                let mut new_interpreter = self.clone();
+                let expr_clone = expr.clone();
+                
+                tokio::spawn(async move {
+                     // In a real implementation, we might want to handle the error
+                     // Or provide a way to join the handle.
+                     // For 'go' fire and forget style:
+                     if let Err(e) = new_interpreter.evaluate(*expr_clone) {
+                         eprintln!("Error in go routine: {:?}", e);
+                     }
+                });
             }
             Stmt::VarDecl { name, value, .. } => {
                 let val = self.evaluate(value)?;
@@ -297,13 +370,13 @@ impl Interpreter {
                 
                 match obj_val {
                     Value::Instance { fields, .. } => {
-                        fields.borrow_mut().insert(name, val);
+                        fields.write().unwrap().insert(name, val);
                     }
                     _ => return Err(self.make_error("Only instances have fields")),
                 }
             }
             Stmt::FnDecl { name, generics, params, body, .. } => {
-                self.globals.insert(name, Value::Function { generics, params, body: Rc::new(body), partial_args: Vec::new() });
+                self.globals.insert(name, Value::Function { generics, params, body: Arc::new(body), partial_args: Vec::new() });
             }
             Stmt::Import(path) => {
                 if let Some(module) = self.native_modules.get(&path) {
@@ -324,14 +397,14 @@ impl Interpreter {
                 let mut method_map = HashMap::new();
                 for method in methods {
                     if let Stmt::FnDecl { name, generics, params, return_type: _, body } = method {
-                         method_map.insert(name, Value::Function { generics, params, body: Rc::new(body), partial_args: Vec::new() });
+                         method_map.insert(name, Value::Function { generics, params, body: Arc::new(body), partial_args: Vec::new() });
                     }
                 }
 
                 self.globals.insert(name.clone(), Value::RecordConstructor { 
                     name, 
                     fields: field_names, 
-                    methods: Rc::new(method_map),
+                    methods: Arc::new(method_map),
                     partial_args: Vec::new() 
                 });
             }
@@ -342,7 +415,7 @@ impl Interpreter {
                 let iterable_val = self.evaluate(iterable)?;
                 let items = match iterable_val {
                     Value::List(items) => items,
-                    Value::ListMutable(items) => items.borrow().clone().into(),
+                    Value::ListMutable(items) => items.read().unwrap().clone().into(),
                     Value::Tuple(items) => items,
                     Value::Set(items) => items,
                     _ => return Err(self.make_error("For loop expects iterable")),
@@ -374,10 +447,10 @@ impl Interpreter {
 
                 for method in methods {
                     if let Stmt::FnDecl { name, generics, params, body, .. } = method {
-                        method_map.insert(name.clone(), Value::Function { generics, params, body: Rc::new(body), partial_args: Vec::new() });
+                        method_map.insert(name.clone(), Value::Function { generics, params, body: Arc::new(body), partial_args: Vec::new() });
                     }
                 }
-                self.globals.insert(name.clone(), Value::Class { name, parent, methods: Rc::new(method_map) });
+                self.globals.insert(name.clone(), Value::Class { name, parent, methods: Arc::new(method_map) });
             }
         }
         Ok(Flow::None)
@@ -388,27 +461,27 @@ impl Interpreter {
             Expr::LiteralInt(i) => Ok(Value::Int(i)),
             Expr::LiteralFloat(f) => Ok(Value::Float(f)),
             Expr::LiteralBool(b) => Ok(Value::Bool(b)),
-            Expr::LiteralString(s) => Ok(Value::String(Rc::new(s))),
+            Expr::LiteralString(s) => Ok(Value::String(Arc::new(s))),
             Expr::List(elements) => {
                 let mut vals = Vec::new();
                 for e in elements {
                     vals.push(self.evaluate(e)?);
                 }
-                Ok(Value::List(Rc::new(vals)))
+                Ok(Value::List(Arc::new(vals)))
             }
             Expr::Tuple(elements) => {
                 let mut vals = Vec::new();
                 for e in elements {
                     vals.push(self.evaluate(e)?);
                 }
-                Ok(Value::Tuple(Rc::new(vals)))
+                Ok(Value::Tuple(Arc::new(vals)))
             }
             Expr::Set(elements) => {
                 let mut vals = Vec::new();
                 for e in elements {
                     vals.push(self.evaluate(e)?);
                 }
-                Ok(Value::Set(Rc::new(vals)))
+                Ok(Value::Set(Arc::new(vals)))
             }
             Expr::Dict(elements) => {
                 let mut vals = Vec::new();
@@ -417,7 +490,7 @@ impl Interpreter {
                     let val = self.evaluate(v)?;
                     vals.push((key, val));
                 }
-                Ok(Value::Dict(Rc::new(vals)))
+                Ok(Value::Dict(Arc::new(vals)))
             }
             Expr::Identifier(name) => {
                 if name == "print" 
@@ -427,7 +500,7 @@ impl Interpreter {
                    || name == "SetMutable" 
                    || name == "DictMutable" {
                     // special hack for built-ins
-                   return Ok(Value::String(Rc::new(name))); 
+                   return Ok(Value::String(Arc::new(name))); 
                 }
                 
                 self.globals.get(&name).cloned().ok_or_else(|| self.make_error(&format!("Undefined variable: {}", name)))
@@ -437,7 +510,7 @@ impl Interpreter {
                 match obj_val {
                     Value::Instance { ref fields, ref methods, class_name: _ } => {
                         // Check fields first
-                        if let Some(val) = fields.borrow().get(&name) {
+                        if let Some(val) = fields.read().unwrap().get(&name) {
                             return Ok(val.clone());
                         }
                         // Check methods
@@ -502,7 +575,7 @@ impl Interpreter {
                     (Value::Int(a), BinaryOp::Neq, Value::Int(b)) => Ok(Value::Bool(a != b)),
                     (Value::Int(a), BinaryOp::Gte, Value::Int(b)) => Ok(Value::Bool(a >= b)),
                     (Value::Int(a), BinaryOp::Lte, Value::Int(b)) => Ok(Value::Bool(a <= b)),
-                    (Value::String(a), BinaryOp::Add, Value::String(b)) => Ok(Value::String(Rc::new(format!("{}{}", a, b)))),
+                    (Value::String(a), BinaryOp::Add, Value::String(b)) => Ok(Value::String(Arc::new(format!("{}{}", a, b)))),
                     (Value::String(a), BinaryOp::Eq, Value::String(b)) => Ok(Value::Bool(a == b)),
                     (Value::String(a), BinaryOp::Neq, Value::String(b)) => Ok(Value::Bool(a != b)),
                     
@@ -538,7 +611,7 @@ impl Interpreter {
                         } else { Err(self.make_error("List index must be integer")) }
                     }
                     Value::ListMutable(l) => {
-                         let list = l.borrow();
+                         let list = l.read().unwrap();
                          if let Value::Int(i) = idx_val {
                             let idx = i as usize;
                             if i < 0 || idx >= list.len() { return Err(self.make_error("Index out of bounds")); }
@@ -553,7 +626,7 @@ impl Interpreter {
                         } else { Err(self.make_error("Tuple index must be integer")) }
                     }
                     Value::TupleMutable(l) => {
-                         let list = l.borrow();
+                         let list = l.read().unwrap();
                          if let Value::Int(i) = idx_val {
                             let idx = i as usize;
                             if i < 0 || idx >= list.len() { return Err(self.make_error("Index out of bounds")); }
@@ -565,7 +638,7 @@ impl Interpreter {
                              let idx = i as usize;
                              if i < 0 || idx >= s.len() { return Err(self.make_error("Index out of bounds")); }
                              if let Some(c) = s.chars().nth(idx) {
-                                 Ok(Value::String(Rc::new(c.to_string())))
+                                 Ok(Value::String(Arc::new(c.to_string())))
                              } else {
                                   Err(self.make_error("Index out of bounds"))
                              }
@@ -580,7 +653,7 @@ impl Interpreter {
                         Err(self.make_error("Key error"))
                     }
                     Value::DictMutable(d) => {
-                        let dict = d.borrow();
+                        let dict = d.read().unwrap();
                          for (k, v) in dict.iter() {
                             if k == &idx_val {
                                 return Ok(v.clone());
@@ -609,7 +682,7 @@ impl Interpreter {
     fn call_method(&mut self, object: Value, name: &str, args: Vec<Value>) -> Result<Value, Value> {
         match object {
             Value::ListMutable(list_rc) => {
-                let mut list = list_rc.borrow_mut();
+                let mut list = list_rc.write().unwrap();
                 match name {
                     "push" => {
                         if args.len() != 1 { return Err(self.make_error("push expects 1 argument")); }
@@ -661,21 +734,21 @@ impl Interpreter {
                 }
             }
             Value::DictMutable(dict_rc) => {
-                let mut dict = dict_rc.borrow_mut();
+                let mut dict = dict_rc.write().unwrap();
                 match name {
                     "keys" => {
                         let keys: Vec<Value> = dict.iter().map(|(k, _)| k.clone()).collect();
-                        Ok(Value::List(Rc::new(keys)))
+                        Ok(Value::List(Arc::new(keys)))
                     }
                     "values" => {
                          let vals: Vec<Value> = dict.iter().map(|(_, v)| v.clone()).collect();
-                         Ok(Value::List(Rc::new(vals)))
+                         Ok(Value::List(Arc::new(vals)))
                     }
                     "items" => {
                          let items: Vec<Value> = dict.iter().map(|(k, v)| {
-                             Value::Tuple(Rc::new(vec![k.clone(), v.clone()]))
+                             Value::Tuple(Arc::new(vec![k.clone(), v.clone()]))
                          }).collect();
-                         Ok(Value::List(Rc::new(items)))
+                         Ok(Value::List(Arc::new(items)))
                     }
                     "len" => Ok(Value::Int(dict.len() as i64)),
                     "clear" => {
@@ -707,17 +780,17 @@ impl Interpreter {
                  match name {
                     "keys" => {
                         let keys: Vec<Value> = dict_rc.iter().map(|(k, _)| k.clone()).collect();
-                        Ok(Value::List(Rc::new(keys)))
+                        Ok(Value::List(Arc::new(keys)))
                     }
                     "values" => {
                          let vals: Vec<Value> = dict_rc.iter().map(|(_, v)| v.clone()).collect();
-                         Ok(Value::List(Rc::new(vals)))
+                         Ok(Value::List(Arc::new(vals)))
                     }
                     "items" => {
                          let items: Vec<Value> = dict_rc.iter().map(|(k, v)| {
-                             Value::Tuple(Rc::new(vec![k.clone(), v.clone()]))
+                             Value::Tuple(Arc::new(vec![k.clone(), v.clone()]))
                          }).collect();
-                         Ok(Value::List(Rc::new(items)))
+                         Ok(Value::List(Arc::new(items)))
                     }
                     "len" => Ok(Value::Int(dict_rc.len() as i64)),
                     "get" => {
@@ -734,7 +807,7 @@ impl Interpreter {
                 }
             }
             Value::SetMutable(set_rc) => {
-                let mut set = set_rc.borrow_mut();
+                let mut set = set_rc.write().unwrap();
                 match name {
                     "add" => {
                          if args.len() != 1 { return Err(self.make_error("add expects 1 argument")); }
@@ -771,16 +844,16 @@ impl Interpreter {
             Value::String(s) => {
                 match name {
                     "len" => Ok(Value::Int(s.len() as i64)),
-                    "upper" => Ok(Value::String(Rc::new(s.to_uppercase()))),
-                    "lower" => Ok(Value::String(Rc::new(s.to_lowercase()))),
+                    "upper" => Ok(Value::String(Arc::new(s.to_uppercase()))),
+                    "lower" => Ok(Value::String(Arc::new(s.to_lowercase()))),
                     "split" => {
                          if args.len() != 1 { return Err(self.make_error("split expects 1 argument (delimiter)")); }
                          match &args[0] {
                              Value::String(delim) => {
                                  let parts: Vec<Value> = s.split(delim.as_str())
-                                     .map(|p| Value::String(Rc::new(p.to_string())))
+                                     .map(|p| Value::String(Arc::new(p.to_string())))
                                      .collect();
-                                 Ok(Value::List(Rc::new(parts)))
+                                 Ok(Value::List(Arc::new(parts)))
                              }
                              _ => Err(self.make_error("split expects a string delimiter")),
                          }
@@ -798,6 +871,7 @@ impl Interpreter {
              _ => Err(self.make_error(&format!("Type does not support method '{}'", name))),
         }
     }
+
     // Helper for applying arguments with currying support
     fn apply(&mut self, func: Value, args: Vec<Value>) -> Result<Value, Value> {
         match func {
@@ -859,8 +933,8 @@ impl Interpreter {
                 } else if all_args.len() == fields.len() {
                     return Ok(Value::Record {
                         name,
-                        fields: Rc::new(fields),
-                        values: Rc::new(all_args),
+                        fields: Arc::new(fields),
+                        values: Arc::new(all_args),
                         methods,
                     });
                 } else {
@@ -878,7 +952,7 @@ impl Interpreter {
             Value::Class { name, methods, .. } => {
                  let instance = Value::Instance {
                      class_name: name.clone(),
-                     fields: Rc::new(RefCell::new(HashMap::new())),
+                     fields: Arc::new(RwLock::new(HashMap::new())),
                      methods: methods.clone(),
                  };
                  if let Some(init_method) = methods.get("__init__") {
@@ -939,19 +1013,19 @@ impl Interpreter {
                         let mut current = start;
                         if step > 0 { while current < end { vals.push(Value::Int(current)); current += step; } }
                         else { while current > end { vals.push(Value::Int(current)); current += step; } }
-                        Ok(Value::List(Rc::new(vals)))
+                        Ok(Value::List(Arc::new(vals)))
                  } else if name == "ListMutable" {
                      if args.len() != 1 { return Err(self.make_error("ListMutable takes 1 arg")); }
-                     match &args[0] { Value::List(l) => Ok(Value::ListMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects List")) }
+                     match &args[0] { Value::List(l) => Ok(Value::ListMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects List")) }
                  } else if name == "TupleMutable" {
                      if args.len() != 1 { return Err(self.make_error("TupleMutable takes 1 arg")); }
-                     match &args[0] { Value::Tuple(l) => Ok(Value::TupleMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects Tuple")) }
+                     match &args[0] { Value::Tuple(l) => Ok(Value::TupleMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects Tuple")) }
                  } else if name == "SetMutable" {
                      if args.len() != 1 { return Err(self.make_error("SetMutable takes 1 arg")); }
-                     match &args[0] { Value::Set(l) => Ok(Value::SetMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects Set")) }
+                     match &args[0] { Value::Set(l) => Ok(Value::SetMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects Set")) }
                  } else if name == "DictMutable" {
                      if args.len() != 1 { return Err(self.make_error("DictMutable takes 1 arg")); }
-                     match &args[0] { Value::Dict(l) => Ok(Value::DictMutable(Rc::new(RefCell::new((**l).clone())))), _ => Err(self.make_error("Expects Dict")) }
+                     match &args[0] { Value::Dict(l) => Ok(Value::DictMutable(Arc::new(RwLock::new((**l).clone())))), _ => Err(self.make_error("Expects Dict")) }
                  } else {
                      Err(self.make_error(&format!("Unknown builtin function: {}", name)))
                  }

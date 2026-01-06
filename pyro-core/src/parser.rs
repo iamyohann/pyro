@@ -60,6 +60,7 @@ impl<'a> Parser<'a> {
             Some(Token::Type) => self.parse_type_alias(),
             Some(Token::Try) => self.parse_try(),
             Some(Token::Raise) => self.parse_raise(),
+            Some(Token::Go) => self.parse_go(),
             _ => {
                 let expr = self.parse_expression()?;
                 
@@ -1039,5 +1040,23 @@ impl<'a> Parser<'a> {
         }
         
         Ok(Stmt::Raise { error, cause })
+    }
+
+    fn parse_go(&mut self) -> Result<Stmt, String> {
+        self.tokens.next(); // consume go
+        
+        let expr = self.parse_expression()?;
+        
+        // Ensure the expression is a function call
+        match expr {
+            Expr::Call { .. } => {},
+             _ => return Err("Expected function call after 'go'".to_string()),
+        }
+
+        if let Some(Token::Newline) = self.tokens.peek() {
+            self.tokens.next();
+        }
+
+        Ok(Stmt::Go(Box::new(expr)))
     }
 }

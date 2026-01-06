@@ -28,6 +28,7 @@ pub enum Token {
     Finally,
     Raise,
     From,
+    Go,
 
     // Identifiers and Literals
     Identifier(String),
@@ -275,6 +276,7 @@ impl<'a> Lexer<'a> {
             "finally" => Token::Finally,
             "raise" => Token::Raise,
             "from" => Token::From,
+            "go" => Token::Go,
             _ => Token::Identifier(ident),
         }
     }

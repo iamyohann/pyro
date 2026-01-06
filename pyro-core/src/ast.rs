@@ -135,6 +135,7 @@ pub enum Stmt {
         error: Expr,
         cause: Option<Expr>,
     },
+    Go(Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
