@@ -7,19 +7,17 @@ use std::process::Command;
 use syn::visit::Visit;
 
 pub fn run() -> Result<()> {
-    // Default to current directory for CLI usage
-    // Or we could try to find pyro.mod and use .externs if we wanted, but let's stick to current dir for explicit command
-    // unless we want to match the new behavior.
-    // For now, let's just use current dir to match previous behavior
-    generate_externs(&std::env::current_dir()?)
+    let cwd = std::env::current_dir()?;
+    let externs_dir = cwd.join(".externs");
+    generate_externs(&externs_dir)
 }
 
 pub fn generate_externs(output_dir: &Path) -> Result<()> {
     // We assume output_dir is .externs inside the project root where pyro.mod exists
     let project_root = output_dir.parent().context("Invalid output directory")?;
-    // println!("Resolving dependencies in {}...", project_root.display());
     
     let manifest = Manifest::resolve_from(project_root).context("No pyro.mod found. Cannot generate externs.")?;
+
     
     // We need to resolve dependencies to find their source code.
     // We'll create a temporary cargo project similar to how `run` does it.

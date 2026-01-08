@@ -1,10 +1,11 @@
 use crate::util;
+use crate::manifest::Manifest;
 use anyhow::{Context, Result};
 use pyro_core::ast::Stmt;
 use pyro_core::transpiler::Transpiler;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::BuildTarget;
@@ -12,10 +13,14 @@ use crate::BuildTarget;
 pub fn r#impl(file: PathBuf, output: Option<PathBuf>, target: BuildTarget) -> Result<()> {
     println!("Building {:?}", file);
 
+    // Resolve Manifest
+    let parent = file.parent().unwrap_or(Path::new("."));
+    let search_path = if parent.as_os_str().is_empty() { Path::new(".") } else { parent };
+    let manifest = Manifest::resolve_from(search_path).ok();
+
     // Generate externs relative to pyro.mod if present
-    if let Ok(_manifest_path) = std::fs::canonicalize(file.parent().unwrap_or(std::path::Path::new("."))) { 
-         let start_path = file.parent().unwrap_or(std::path::Path::new("."));
-         let mut current = start_path.to_path_buf();
+    if let Ok(_manifest_path) = std::fs::canonicalize(search_path) { 
+         let mut current = search_path.to_path_buf();
          loop {
              if current.join("pyro.mod").exists() {
                  let externs_dir = current.join(".externs");
@@ -90,7 +95,26 @@ fn main() {{
             fs::write(build_dir.join("src/main.rs"), full_rs)?;
 
             // Write Cargo.toml
-            let cargo_toml = r#"[package]
+            let mut dependencies = String::new();
+            
+            // Default dependencies
+            let mut deps_map = std::collections::HashMap::new();
+            deps_map.insert("rand".to_string(), "0.8".to_string());
+            deps_map.insert("async-channel".to_string(), "2.3".to_string());
+            
+            if let Some(m) = &manifest {
+                if let Some(rust_config) = &m.rust {
+                    for (name, version) in &rust_config.dependencies {
+                        deps_map.insert(name.clone(), version.clone());
+                    }
+                }
+            }
+            
+            for (name, version) in deps_map {
+                dependencies.push_str(&format!("{} = \"{}\"\n", name, version));
+            }
+
+            let cargo_toml = format!(r#"[package]
 name = "pyro_program"
 version = "0.1.0"
 edition = "2021"
@@ -98,12 +122,11 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-rand = "0.8"
-async-channel = "2.3"
-"#;
+{}
+"#, dependencies);
             fs::write(build_dir.join("Cargo.toml"), cargo_toml)?;
 
-            fs::write(build_dir.join("Cargo.toml"), cargo_toml)?;
+
 
             println!("Compiling to native binary...");
             

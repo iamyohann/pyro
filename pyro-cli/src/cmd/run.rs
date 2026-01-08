@@ -21,16 +21,20 @@ pub fn r#impl(file: PathBuf) -> Result<()> {
     if has_native_deps {
         if let Some(m) = manifest {
             // Generate externs relative to pyro.mod
-            if let Ok(_manifest_path) = std::fs::canonicalize(file.parent().unwrap_or(Path::new("."))) { // Approximation of root
+            let parent = file.parent().unwrap_or(Path::new("."));
+            let search_path = if parent.as_os_str().is_empty() { Path::new(".") } else { parent };
+
+            if let Ok(_manifest_path) = std::fs::canonicalize(search_path) {
                  // Ideally manifest should tell us its root, but we can infer from where we found it or just use current dir if we loaded it from there.
                  // Manifest::load uses current dir or recursive parent. Manifest::resolve_from uses file parent. 
                  // Let's re-resolve correctly to find root.
-                 let start_path = file.parent().unwrap_or(Path::new("."));
-                 let mut current = start_path.to_path_buf();
+                 let mut current = search_path.to_path_buf();
                  loop {
                      if current.join("pyro.mod").exists() {
                          let externs_dir = current.join(".externs");
-                         let _ = crate::cmd::externs::generate_externs(&externs_dir);
+                         if let Err(e) = crate::cmd::externs::generate_externs(&externs_dir) {
+                             eprintln!("Warning: Failed to generate externs: {}", e);
+                         }
                          break;
                      }
                      if !current.pop() { break; }
