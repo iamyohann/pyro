@@ -268,7 +268,7 @@ impl Interpreter {
             Stmt::Try { body, catch_var, catch_body, finally_body } => {
                 let result = self.run(body);
                 
-                let mut flow_result = Ok(Flow::None); // default
+                let flow_result;
 
                 if let Err(e) = result {
                     // Exception occurred

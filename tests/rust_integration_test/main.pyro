@@ -1,8 +1,8 @@
-extern "rand::random" def rand_float() -> float
-extern "hex::encode" def hex_encode(input: string) -> string
+import extern.hex
+import extern.rand
 
 print("Testing Rust Integration...")
-let x = rand_float()
+let x = extern.rand.random_float()
 print("Random Number: " + str(x))
 
 if x >= 0.0:
@@ -13,7 +13,7 @@ if x >= 0.0:
 else:
     print("FAILURE: Random number < 0.0")
 
-let encoded = hex_encode("hello world")
+let encoded = extern.hex.encode("hello world")
 print("Encoded: " + encoded)
 if encoded == "68656c6c6f20776f726c64":
     print("SUCCESS: Hex encoding correct")

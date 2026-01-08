@@ -13,48 +13,70 @@ version = "0.1.0"
 
 [rust]
 rand = "0.8"
-base64 = "0.21"
+hex = "0.4"
 ```
 
-## Auto-Generated Bindings
+## Consuming Rust Crates
 
-The easiest way to call Rust code is to use Pyro's auto-binding generation. You declare an `extern` function with a string literal pointing to the Rust function's path. Pyro will automatically generate the glue code to marshal arguments and return values.
+When you run `pyro run` (or `pyro build`), Pyro automatically:
+1.  Downloads and compiles the Rust dependencies.
+2.  Generates Pyro extern definitions for them in a `.externs` directory.
+3.  Links them into your project.
 
-### Example
+You can then import them using the special `extern.` prefix syntax:
 
 ```python
-# main.pyro
-extern "rand::random" def rand_float() -> float
-extern "base64::encode" def b64_encode(input: string) -> string
+import extern.hex
+import extern.rand
 
-let x = rand_float()
-print(x)
-
-let encoded = b64_encode("hello world")
+# Functions are namespaced under the import path
+let encoded = extern.hex.encode("hello world")
 print(encoded)
 ```
 
-The Pyro CLI (`pyro run`) handles the rest:
-1.  Detects `[rust]` dependencies in `pyro.mod`.
-2.  Scans your code for `extern "path" def ...`.
-3.  Generates a Rust wrapper project in `~/.pyro/rustpkg/<project_hash>`.
-4.  Compiles and runs your code with the native extensions linked.
+## Naming Conventions
 
-### Supported Types
+The generated bindings follow these conventions:
 
-Currently, the auto-generator supports mapping the following primitive types:
+-   **Import Path**: `extern.<crate_name>` (e.g., `extern.hex`, `import extern.rand`).
+-   **Usage**: `extern.<crate_name>.<function_name>` (e.g., `extern.hex.encode`).
+
+### Generics
+
+For generic Rust functions (like `rand::random<T>()`), Pyro generates specialized variants for common primitive types by appending the type name:
+
+-   `random<f64>` -> `extern.rand.random_float()`
+-   `random<i64>` -> `extern.rand.random_int()`
+-   `random<bool>` -> `extern.rand.random_bool()`
+
+```python
+let f = extern.rand.random_float()
+let i = extern.rand.random_int()
+```
+
+## Generation CLI
+
+The automated generation happens implicitly during run/build. However, if you wish to manually trigger it to inspect the generated files (located in `.externs/`), you can run:
+
+```bash
+pyro externs
+```
+
+## Supported Types
+
+Currently, the auto-generator supports mapping the following primitive types. Rust functions utilizing other types will be skipped or commented out in the generated file.
 
 | Pyro Type | Rust Type |
 | :--- | :--- |
-| `int` | `i64` |
-| `float` | `f64` |
+| `int` | `i64`, `i32`, `u64`, `u32` |
+| `float` | `f64`, `f32` |
 | `bool` | `bool` |
-| `string` | `String` |
+| `string` | `String`, `str`, `Vec<u8>`, `&[u8]` |
 | `void` | `()` |
 
 ## Manual Native Functions (Advanced)
 
-For more complex logic that requires manual argument parsing or state management, you can still define a `native.rs` file in your project root.
+For more complex logic that requires manual argument parsing, state management, or unsupported types, you can still define a `native.rs` file in your project root.
 
 ### 1. Create `native.rs`
 

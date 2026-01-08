@@ -12,6 +12,24 @@ use crate::BuildTarget;
 pub fn r#impl(file: PathBuf, output: Option<PathBuf>, target: BuildTarget) -> Result<()> {
     println!("Building {:?}", file);
 
+    // Generate externs relative to pyro.mod if present
+    if let Ok(_manifest_path) = std::fs::canonicalize(file.parent().unwrap_or(std::path::Path::new("."))) { 
+         let start_path = file.parent().unwrap_or(std::path::Path::new("."));
+         let mut current = start_path.to_path_buf();
+         loop {
+             if current.join("pyro.mod").exists() {
+                 let externs_dir = current.join(".externs");
+                 // We don't fail build if extern generation fails, just warn or ignore?
+                 // Best to try and log error execution but proceed if possible (though likely fail later)
+                 if let Err(e) = crate::cmd::externs::generate_externs(&externs_dir) {
+                     eprintln!("Warning: Failed to generate externs: {}", e);
+                 }
+                 break;
+             }
+             if !current.pop() { break; }
+         }
+    }
+
     let mut statements = Vec::new();
     let mut loaded = HashSet::new();
     

@@ -604,6 +604,26 @@ impl<'a> Parser<'a> {
                 }
                 Ok(Expr::List(elements))
             }
+            Some(Token::Extern) => {
+                // Handle extern.crate.func -> extern_crate_func
+                let mut name = "extern".to_string();
+                self.tokens.next(); // consume extern
+
+                loop {
+                    if let Some(Token::Dot) = self.tokens.peek() {
+                        self.tokens.next(); // consume dot
+                        if let Some(Token::Identifier(s)) = self.tokens.next() {
+                            name.push('_');
+                            name.push_str(s);
+                        } else {
+                            return Err("Expected identifier after '.'".to_string());
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                Ok(Expr::Identifier(name))
+            }
             t => Err(format!("Unexpected token in expression: {:?}", t)),
         }
     }
@@ -788,11 +808,17 @@ impl<'a> Parser<'a> {
         } else {
             // Parse dotted identifier: std.math
             loop {
-                if let Some(Token::Identifier(s)) = self.tokens.next() {
+                let token = self.tokens.next();
+                if let Some(Token::Identifier(s)) = token {
                     if !path.is_empty() {
                         path.push('.');
                     }
                     path.push_str(s);
+                } else if let Some(Token::Extern) = token {
+                    if !path.is_empty() {
+                        path.push('.');
+                    }
+                    path.push_str("extern");
                 } else {
                     return Err("Expected identifier in import path".to_string());
                 }

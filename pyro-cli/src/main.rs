@@ -1,8 +1,6 @@
 use clap::{Parser, Subcommand};
-use pyro_core::interpreter::Interpreter;
 // use pyro_core::ast::Stmt;
 use anyhow::{Context, Result};
-use std::collections::HashSet;
 // use std::fs;
 use std::path::PathBuf;
 // use pyro_core::lexer::Lexer;
@@ -47,8 +45,11 @@ enum Commands {
     },
     /// Install dependencies
     Install,
+    /// Generate extern definitions for Rust dependencies
+    Externs,
     /// Run the interactive shell
     Shell,
+
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -99,6 +100,9 @@ async fn async_main() -> Result<()> {
         }
         Commands::Install => {
             cmd::installer::r#impl()?;
+        }
+        Commands::Externs => {
+            cmd::externs::run()?;
         }
         Commands::Build { file, output, target } => {
             cmd::build::r#impl(file.clone(), output.clone(), target.clone())?;

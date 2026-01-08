@@ -118,7 +118,20 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 '*' => { self.input.next(); tokens.push(Token::Star); }
-                '/' => { self.input.next(); tokens.push(Token::Slash); }
+                '/' => {
+                    self.input.next();
+                    if let Some(&'/') = self.input.peek() {
+                        // Skip to end of line
+                        while let Some(&c) = self.input.peek() {
+                             if c == '\n' {
+                                 break;
+                             }
+                             self.input.next();
+                        }
+                    } else {
+                        tokens.push(Token::Slash);
+                    }
+                }
                 '=' => {
                     self.input.next();
                     if let Some(&'=') = self.input.peek() {

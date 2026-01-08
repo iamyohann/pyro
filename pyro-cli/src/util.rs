@@ -51,6 +51,33 @@ pub fn process_file(path: PathBuf, loaded: &mut HashSet<PathBuf>, statements: &m
                         dep_path = pkg_path;
                     }
                 }
+                
+                // 3. Check .externs relative to possible pyro.mod locations
+                // This is a bit tricky as we don't know where pyro.mod is easily without searching up.
+                // But for now, let's assume it's in the same dir as the file, or parent.
+                // A better approach is to search up for .externs
+                if !dep_path.exists() {
+                    let mut current = path.parent().unwrap().to_path_buf();
+                    loop {
+                        let externs_path = current.join(".externs").join(import_path);
+                         // Check for .pyro extension if not present? The import_path usually implies .pyro or is bare.
+                         // The parser usually passes "foo.pyro" if it was `import "foo.pyro"`, or "foo" if `import foo`.
+                         // If "foo", we need to append .pyro
+                        let target = if externs_path.to_string_lossy().ends_with(".pyro") {
+                             externs_path
+                        } else {
+                             let mut p = externs_path.clone().into_os_string();
+                             p.push(".pyro");
+                             PathBuf::from(p)
+                        };
+
+                        if target.exists() {
+                            dep_path = target;
+                            break;
+                        }
+                        if !current.pop() { break; }
+                    }
+                }
             }
             
             process_file(dep_path, loaded, statements)?;

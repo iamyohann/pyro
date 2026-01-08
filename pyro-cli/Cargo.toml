@@ -15,3 +15,6 @@ hex = "0.4"
 walkdir = "2.4"
 rustyline = "17.0.2"
 num_cpus = "1.0"
+syn = { version = "2.0", features = ["full", "visit"] }
+cargo_metadata = "0.18"
+serde_json = "1.0"

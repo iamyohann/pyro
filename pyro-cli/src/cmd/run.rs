@@ -20,13 +20,32 @@ pub fn r#impl(file: PathBuf) -> Result<()> {
 
     if has_native_deps {
         if let Some(m) = manifest {
+            // Generate externs relative to pyro.mod
+            if let Ok(_manifest_path) = std::fs::canonicalize(file.parent().unwrap_or(Path::new("."))) { // Approximation of root
+                 // Ideally manifest should tell us its root, but we can infer from where we found it or just use current dir if we loaded it from there.
+                 // Manifest::load uses current dir or recursive parent. Manifest::resolve_from uses file parent. 
+                 // Let's re-resolve correctly to find root.
+                 let start_path = file.parent().unwrap_or(Path::new("."));
+                 let mut current = start_path.to_path_buf();
+                 loop {
+                     if current.join("pyro.mod").exists() {
+                         let externs_dir = current.join(".externs");
+                         let _ = crate::cmd::externs::generate_externs(&externs_dir);
+                         break;
+                     }
+                     if !current.pop() { break; }
+                 }
+            }
             run_with_rust_deps(file, m)
         } else {
             // Should be unreachable due to check above, but fallback
             run_interpreter(file)
         }
     } else {
-        run_interpreter(file)
+         // Also check for extern generation even if no rust deps? No, only if pyro.mod exists
+         // But wait, if has_native_deps is false, maybe we still want to generate if rust section exists but is empty? 
+         // manifest.rust.is_some() checks this.
+         run_interpreter(file)
     }
 }
 
@@ -63,15 +82,15 @@ fn run_with_rust_deps(file: PathBuf, manifest: Manifest) -> Result<()> {
     }
 
 
-    // 2. Parse User Code to find Externs
-    let user_code = std::fs::read_to_string(&file)?;
-    let tokens = pyro_core::lexer::Lexer::new(&user_code).tokenize();
-    // We assume the file is parseable; if not, the runner will fail later anyway.
-    let program = pyro_core::parser::Parser::new(&tokens).parse()
-        .map_err(|e| anyhow::anyhow!("Parser error during binding scan: {:?}", e))?;
+    // 2. Parse User Code to find Externs (recursively)
+    let mut statements = Vec::new();
+    let mut loaded = std::collections::HashSet::new();
+    
+    // We utilize the updated process_file which handles .externs resolution
+    crate::util::process_file(file.clone(), &mut loaded, &mut statements)?;
 
     let mut extern_funcs = Vec::new();
-    for stmt in program.statements {
+    for stmt in statements {
         if let pyro_core::ast::Stmt::Extern { func_name, params, return_type, rust_path, .. } = stmt {
             extern_funcs.push((func_name, params, return_type, rust_path));
         }
@@ -152,7 +171,7 @@ anyhow = "1.0"
                  // Type check and convert
                  // Only implementing basic types for now
                  let (_type_check, _type_cast) = match param_type {
-                     pyro_core::ast::Type::Int => ("matches!(val, Value::Integer(_))", "if let Value::Integer(i) = val { i } else { unreachable!() }"),
+                     pyro_core::ast::Type::Int => ("matches!(val, Value::Int(_))", "if let Value::Int(i) = val { i } else { unreachable!() }"),
                      pyro_core::ast::Type::Float => ("matches!(val, Value::Float(_))", "if let Value::Float(f) = val { f } else { unreachable!() }"),
                      pyro_core::ast::Type::Bool => ("matches!(val, Value::Bool(_))", "if let Value::Bool(b) = val { b } else { unreachable!() }"),
                      pyro_core::ast::Type::String => ("matches!(val, Value::String(_))", "if let Value::String(s) = val { s } else { unreachable!() }"),
@@ -162,7 +181,7 @@ anyhow = "1.0"
                  // For now, let's assume direct cast via if check
                  match param_type {
                      pyro_core::ast::Type::Int => {
-                         auto_wrappers.push_str(&format!("    let {} = if let Value::Integer(i) = {} {{ i }} else {{ return Err(Value::String(\"Expected int for argument '{}'\".to_string().into())); }};\n", arg_var, arg_var, param_name));
+                         auto_wrappers.push_str(&format!("    let {} = if let Value::Int(i) = {} {{ i }} else {{ return Err(Value::String(\"Expected int for argument '{}'\".to_string().into())); }};\n", arg_var, arg_var, param_name));
                          rust_args.push(arg_var);
                      },
                      pyro_core::ast::Type::Float => {
@@ -200,7 +219,7 @@ anyhow = "1.0"
             auto_wrappers.push_str(&format!("    let result: {} = ::{}({});\n", rust_ret_type, rust_func_path, args_str));
 
              match return_type {
-                 pyro_core::ast::Type::Int => auto_wrappers.push_str("    Ok(Value::Integer(result))\n"),
+                 pyro_core::ast::Type::Int => auto_wrappers.push_str("    Ok(Value::Int(result))\n"),
                  pyro_core::ast::Type::Float => {
                       auto_wrappers.push_str("    Ok(Value::Float(result as f64))\n")
                  },
@@ -248,7 +267,6 @@ anyhow = "1.0"
     let main_rs = format!(r#"
 use pyro_core::interpreter::Interpreter;
 use pyro_core::stdlib;
-use std::collections::HashSet;
 
 {}
 mod native_auto;

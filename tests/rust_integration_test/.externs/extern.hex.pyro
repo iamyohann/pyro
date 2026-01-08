@@ -1,0 +1,5 @@
+extern "hex::encode" def extern_hex_encode(data: string) -> string
+extern "hex::encode_upper" def extern_hex_encode_upper(data: string) -> string
+// extern "hex::decode" def extern_hex_decode(data: string) -> unknown // Generic/Unsupported
+// extern "hex::decode_to_slice" def extern_hex_decode_to_slice(data: string, out: string) -> unknown // Generic/Unsupported
+// extern "hex::encode_to_slice" def extern_hex_encode_to_slice(input: string, output: string) -> unknown // Generic/Unsupported

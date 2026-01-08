@@ -1,0 +1,5 @@
+extern "rand::random::<i64>" def extern_rand_random_int() -> int
+extern "rand::random::<f64>" def extern_rand_random_float() -> float
+extern "rand::random::<bool>" def extern_rand_random_bool() -> bool
+// Generic base function random skipped in favor of specialized variants
+// extern "rand::rng" def extern_rand_rng(seed: int) -> unknown // Generic/Unsupported

@@ -172,7 +172,6 @@ fn is_input_complete(input: &str) -> bool {
     let mut parens = 0;
     let mut brackets = 0;
     let mut braces = 0;
-    let mut indent_level = 0;
 
     for token in &tokens {
         match token {
@@ -182,8 +181,6 @@ fn is_input_complete(input: &str) -> bool {
             Token::RBracket => brackets -= 1,
             Token::LBrace => braces += 1,
             Token::RBrace => braces -= 1,
-            Token::Indent => indent_level += 1,
-            Token::Dedent => indent_level -= 1,
             _ => {}
         }
     }
